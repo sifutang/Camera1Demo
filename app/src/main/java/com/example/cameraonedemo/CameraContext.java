@@ -4,11 +4,15 @@ import android.app.Activity;
 import android.content.Context;
 import android.graphics.Rect;
 import android.hardware.Camera;
+import android.media.CamcorderProfile;
+import android.media.MediaRecorder;
+import android.os.Environment;
 import android.util.Log;
 import android.view.OrientationEventListener;
 import android.view.SurfaceHolder;
 import android.widget.Toast;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +27,12 @@ public class CameraContext {
     private CameraInfo currCameraInfo;
     private MyOrientationEventListener orientationEventListener;
     private SurfaceHolder surfaceHolder;
+
+    // for video
+    private MediaRecorder mediaRecorder;
+    private volatile boolean isRecording;
+    private File videoFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/test.mp4");
+
 
     private int displayOrientation;
     private int rotation;
@@ -74,6 +84,11 @@ public class CameraContext {
         List<Camera.Size> pictureSizeList = parameters.getSupportedPictureSizes();
         for (Camera.Size size: pictureSizeList) {
             Log.d(TAG, "picture size w " + size.width + ", h = " + size.height);
+        }
+
+        List<Camera.Size> videoSizeList = parameters.getSupportedVideoSizes();
+        for (Camera.Size size: pictureSizeList) {
+            Log.d(TAG, "video size w " + size.width + ", h = " + size.height);
         }
         parameters.setPreviewSize(1920, 1080);
         parameters.setPictureSize(800, 600);
@@ -196,6 +211,82 @@ public class CameraContext {
             camera.release();
             camera = null;
         }
+    }
+
+    public boolean isRecording() {
+        return isRecording;
+    }
+
+    public void startRecord() {
+        isRecording = true;
+        if (mediaRecorder == null) {
+            mediaRecorder = new MediaRecorder();
+        }
+        mediaRecorder.reset();
+
+        // config media recorder start
+        camera.unlock();
+        mediaRecorder.setOrientationHint(currCameraInfo.getPictureNeedRotateOrientation());
+        mediaRecorder.setCamera(camera);
+        mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+        mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+
+        CamcorderProfile profile = CamcorderProfile.get(
+                currCameraInfo.getCameraId(), CamcorderProfile.QUALITY_480P);
+        Log.e(TAG, "startRecord: audioCodec = " + profile.audioCodec
+                    + ", videoCodec = " + profile.videoCodec
+                    + ", videoBitRate = " + profile.videoBitRate
+                    + ", videoFrameRate = " + profile.videoFrameRate
+                    + ", w = " + profile.videoFrameWidth
+                    + ", h = " + profile.videoFrameHeight);
+
+        mediaRecorder.setAudioEncoder(profile.audioCodec);
+        mediaRecorder.setVideoEncoder(profile.videoCodec);
+        mediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
+        mediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);
+        mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
+        mediaRecorder.setPreviewDisplay(surfaceHolder.getSurface());
+
+        if (videoFile.exists()) {
+            boolean delete = videoFile.delete();
+            Log.d(TAG, "startRecord: delete last file: " + delete);
+        }
+
+        Log.d(TAG, "startRecord: file = " + videoFile);
+        mediaRecorder.setOutputFile(videoFile.getAbsolutePath());
+        mediaRecorder.setOnErrorListener(new MediaRecorder.OnErrorListener() {
+            @Override
+            public void onError(MediaRecorder mr, int what, int extra) {
+                Log.d(TAG, "onError: what = " + what + ", extra = " + extra);
+                mediaRecorder.stop();
+                mediaRecorder.reset();
+
+                camera.startPreview();
+            }
+        });
+        // config media recorder end
+
+        try {
+            mediaRecorder.prepare();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        mediaRecorder.start();
+
+        Log.d(TAG, "startRecord: ");
+    }
+
+    public void stopRecord() {
+        isRecording = false;
+        Log.d(TAG, "stopRecord: ");
+        mediaRecorder.stop();
+        mediaRecorder.reset();
+
+        camera.startPreview();
+        enableCaf();
+        Toast.makeText(context, "video save path = " + videoFile.getAbsolutePath(), Toast.LENGTH_LONG).show();
     }
 
     private class MyOrientationEventListener extends OrientationEventListener {

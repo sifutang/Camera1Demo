@@ -21,6 +21,7 @@ import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 
 import java.util.concurrent.ExecutorService;
@@ -35,6 +36,7 @@ public class MainActivity extends AppCompatActivity
 
     private SurfaceView surfaceView;
     private ImageView pictureImageView;
+    private Button recordBtn;
 
     private CameraContext cameraContext;
     private int currentCameraIdType = Camera.CameraInfo.CAMERA_FACING_BACK;
@@ -57,8 +59,14 @@ public class MainActivity extends AppCompatActivity
         findViewById(R.id.switch_btn).setOnClickListener(this);
         findViewById(R.id.capture_btn).setOnClickListener(this);
 
+        recordBtn = findViewById(R.id.record_btn);
+        recordBtn.setOnClickListener(this);
+
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {Manifest.permission.CAMERA}, 1000);
+            requestPermissions(new String[] {
+                    Manifest.permission.CAMERA,
+                    Manifest.permission.RECORD_AUDIO,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1000);
         }
         cameraContext = new CameraContext(this);
     }
@@ -178,6 +186,16 @@ public class MainActivity extends AppCompatActivity
             });
         } else if (v.getId() == R.id.picture_image_view) {
             pictureImageView.setVisibility(View.INVISIBLE);
+        } else if (v.getId() == R.id.record_btn) {
+            if (cameraContext != null) {
+                if (cameraContext.isRecording()) {
+                    cameraContext.stopRecord();
+                    recordBtn.setText("录像");
+                } else {
+                    cameraContext.startRecord();
+                    recordBtn.setText("结束");
+                }
+            }
         }
     }
 
