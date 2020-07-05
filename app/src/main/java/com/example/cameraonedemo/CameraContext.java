@@ -30,7 +30,6 @@ public class CameraContext {
     private Camera.AutoFocusMoveCallback cafCallback = new Camera.AutoFocusMoveCallback() {
         @Override
         public void onAutoFocusMoving(boolean start, Camera camera) {
-            Log.e(TAG, "onAutoFocusMoving: start " + start);
             Toast.makeText(context,
                     "focus " + (start ? "start" : "end"), Toast.LENGTH_SHORT).show();
         }
@@ -39,7 +38,6 @@ public class CameraContext {
     private Camera.AutoFocusCallback afCallback = new Camera.AutoFocusCallback() {
         @Override
         public void onAutoFocus(boolean success, Camera camera) {
-            Log.d(TAG, "onAutoFocus: success = " + success);
             Toast.makeText(context,
                     "focus " + (success ? "success" : "fail"), Toast.LENGTH_SHORT).show();
         }
@@ -139,6 +137,21 @@ public class CameraContext {
         openCamera(type);
     }
 
+    public void cancelAutoFocus() {
+        if (camera != null) {
+            camera.cancelAutoFocus();
+            Log.d(TAG, "cancelAutoFocus: ");
+        }
+    }
+
+    public void enableCaf() {
+        if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
+            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+            camera.setAutoFocusMoveCallback(cafCallback);
+            camera.setParameters(parameters);
+            Log.d(TAG, "enableCaf: ");
+        }
+    }
 
     public void onTouchAF(int x, int y,
                           int focusW, int focusH,

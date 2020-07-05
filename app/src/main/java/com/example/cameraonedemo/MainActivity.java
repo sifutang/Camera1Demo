@@ -1,5 +1,6 @@
 package com.example.cameraonedemo;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -12,6 +13,9 @@ import android.graphics.BitmapFactory;
 import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
@@ -26,6 +30,8 @@ public class MainActivity extends AppCompatActivity
         implements SurfaceHolder.Callback, View.OnClickListener {
 
     private static final String TAG = "MainActivity";
+    private static final int MSG_CANCEL_AUTO_FOCUS = 1000;
+    private static final int MSG_TOUCH_AF_LOCK_TIME_OUT = 5000;
 
     private SurfaceView surfaceView;
     private ImageView pictureImageView;
@@ -34,6 +40,7 @@ public class MainActivity extends AppCompatActivity
     private int currentCameraIdType = Camera.CameraInfo.CAMERA_FACING_BACK;
 
     private ExecutorService executor = Executors.newSingleThreadExecutor();
+    private MainHandler mainHandler = new MainHandler(Looper.getMainLooper());
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
@@ -77,6 +84,7 @@ public class MainActivity extends AppCompatActivity
                 cameraContext.pause();
             }
         });
+        mainHandler.removeCallbacksAndMessages(null);
     }
 
     @Override
@@ -111,6 +119,7 @@ public class MainActivity extends AppCompatActivity
                 final int y = (int) event.getY();
                 final boolean isMirror = currentCameraIdType == Camera.CameraInfo.CAMERA_FACING_FRONT;
 
+                mainHandler.removeMessages(MSG_CANCEL_AUTO_FOCUS);
                 executor.submit(new Runnable() {
                     @Override
                     public void run() {
@@ -119,6 +128,7 @@ public class MainActivity extends AppCompatActivity
                         }
                     }
                 });
+                mainHandler.sendEmptyMessageDelayed(MSG_CANCEL_AUTO_FOCUS, MSG_TOUCH_AF_LOCK_TIME_OUT);
 
                 return false;
             }
@@ -168,6 +178,26 @@ public class MainActivity extends AppCompatActivity
             });
         } else if (v.getId() == R.id.picture_image_view) {
             pictureImageView.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    private class MainHandler extends Handler {
+
+        MainHandler(Looper looper) {
+            super((looper));
+        }
+
+        @Override
+        public void dispatchMessage(@NonNull Message msg) {
+            super.dispatchMessage(msg);
+            switch (msg.what) {
+                case MSG_CANCEL_AUTO_FOCUS:
+                    if (cameraContext != null) {
+                        cameraContext.cancelAutoFocus();
+                        cameraContext.enableCaf();
+                    }
+                    break;
+            }
         }
     }
 }
