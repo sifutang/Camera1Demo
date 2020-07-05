@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.pm.PackageManager;
 
 import android.graphics.Bitmap;
@@ -15,6 +16,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
+import android.view.OrientationEventListener;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -37,11 +39,14 @@ public class MainActivity extends AppCompatActivity
 
     private Camera camera;
     private Camera.Parameters parameters;
+    private CameraInfo currCameraInfo;
+    private MyOrientationEventListener orientationEventListener;
 
     private int previewW;
     private int previewH;
     private int displayOrientation;
     private int currentCameraIdType = Camera.CameraInfo.CAMERA_FACING_BACK;
+    private int rotation;
 
     private Camera.AutoFocusMoveCallback cafCallback = new Camera.AutoFocusMoveCallback() {
         @Override
@@ -80,17 +85,21 @@ public class MainActivity extends AppCompatActivity
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[] {Manifest.permission.CAMERA}, 1000);
         }
+
+        orientationEventListener = new MyOrientationEventListener(this);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        orientationEventListener.enable();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         closeCamera();
+        orientationEventListener.disable();
     }
 
     @Override
@@ -158,10 +167,10 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onClick(View v) {
         if (v.getId() == R.id.switch_btn) {
-            if (currentCameraIdType == Camera.CameraInfo.CAMERA_FACING_BACK) {
-                currentCameraIdType = Camera.CameraInfo.CAMERA_FACING_FRONT;
+            if (currentCameraIdType == CameraInfo.CAMERA_FACING_BACK) {
+                currentCameraIdType = CameraInfo.CAMERA_FACING_FRONT;
             } else {
-                currentCameraIdType = Camera.CameraInfo.CAMERA_FACING_BACK;
+                currentCameraIdType = CameraInfo.CAMERA_FACING_BACK;
             }
 
             closeCamera();
@@ -182,22 +191,8 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void openCamera(int type) {
-        int cameraNum = Camera.getNumberOfCameras();
-        int cameraId = -1;
-        Camera.CameraInfo info = new Camera.CameraInfo();
-        for (int i = 0; i < cameraNum; i++) {
-            Camera.getCameraInfo(i, info);
-            if (info.facing == type) {
-                cameraId = i;
-                break;
-            }
-        }
-
-        if (cameraId == -1) {
-            Toast.makeText(this, "Can't find camera id", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
+        currCameraInfo = new CameraInfo(type);
+        int cameraId = currCameraInfo.getCameraId();
         camera = Camera.open(cameraId);
         parameters = camera.getParameters();
         List<Camera.Size> previewSizeList = parameters.getSupportedPreviewSizes();
@@ -227,13 +222,13 @@ public class MainActivity extends AppCompatActivity
             e.printStackTrace();
         }
         camera.startPreview();
-        Log.d(TAG, "cameraNum = " + cameraNum
-                + "， cameraId = " + cameraId
-                + ", displayOrientation = " + displayOrientation);
+        Log.d(TAG, "openCamera: " + currCameraInfo);
     }
 
     private void capture() {
         if (camera != null) {
+            parameters.setRotation(rotation);
+            camera.setParameters(parameters);
             camera.takePicture(new Camera.ShutterCallback() {
                 /**
                  * Called as near as possible to the moment when a photo is captured
@@ -258,10 +253,39 @@ public class MainActivity extends AppCompatActivity
                     camera.startPreview();
 
                     Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                    if (bitmap == null) {
+                        return;
+                    }
+
+                    Log.d(TAG, "onPictureTaken");
                     pictureImageView.setImageBitmap(bitmap);
                     pictureImageView.setVisibility(View.VISIBLE);
                 }
             });
+        }
+    }
+
+    private class MyOrientationEventListener extends OrientationEventListener {
+
+        public MyOrientationEventListener(Context context) {
+            super(context);
+        }
+
+        @Override
+        public void onOrientationChanged(int orientation) {
+            if (orientation == ORIENTATION_UNKNOWN) return;
+            orientation = (orientation + 45) / 90 * 90;
+            int degrees;
+            if (currCameraInfo.getFacing() == CameraInfo.CAMERA_FACING_FRONT) {
+                degrees = (currCameraInfo.getPictureNeedRotateOrientation() - orientation + 360) % 360;
+            } else { // back-facing camera
+                degrees = (currCameraInfo.getPictureNeedRotateOrientation() + orientation) % 360;
+            }
+
+            if (rotation != degrees) {
+                rotation = degrees;
+                Log.d(TAG, "onOrientationChanged: rotation = " + rotation + ", orientation = " + orientation);
+            }
         }
     }
 }
