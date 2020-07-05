@@ -230,7 +230,6 @@ public class CameraContext {
         mediaRecorder.setCamera(camera);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
-        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
 
         CamcorderProfile profile = CamcorderProfile.get(
                 currCameraInfo.getCameraId(), CamcorderProfile.QUALITY_480P);
@@ -239,14 +238,15 @@ public class CameraContext {
                     + ", videoBitRate = " + profile.videoBitRate
                     + ", videoFrameRate = " + profile.videoFrameRate
                     + ", w = " + profile.videoFrameWidth
-                    + ", h = " + profile.videoFrameHeight);
+                    + ", h = " + profile.videoFrameHeight
+                    + ", outputFormat = " + profile.fileFormat);
 
+        mediaRecorder.setOutputFormat(profile.fileFormat);
         mediaRecorder.setAudioEncoder(profile.audioCodec);
         mediaRecorder.setVideoEncoder(profile.videoCodec);
         mediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
         mediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);
         mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
-        mediaRecorder.setPreviewDisplay(surfaceHolder.getSurface());
 
         if (videoFile.exists()) {
             boolean delete = videoFile.delete();
