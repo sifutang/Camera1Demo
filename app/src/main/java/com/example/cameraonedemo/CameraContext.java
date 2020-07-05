@@ -226,7 +226,7 @@ public class CameraContext {
 
         // config media recorder start
         camera.unlock();
-        mediaRecorder.setOrientationHint(currCameraInfo.getPictureNeedRotateOrientation());
+        mediaRecorder.setOrientationHint(rotation);
         mediaRecorder.setCamera(camera);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);

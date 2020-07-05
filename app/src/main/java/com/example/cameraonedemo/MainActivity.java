@@ -187,15 +187,28 @@ public class MainActivity extends AppCompatActivity
         } else if (v.getId() == R.id.picture_image_view) {
             pictureImageView.setVisibility(View.INVISIBLE);
         } else if (v.getId() == R.id.record_btn) {
-            if (cameraContext != null) {
-                if (cameraContext.isRecording()) {
-                    cameraContext.stopRecord();
-                    recordBtn.setText("录像");
-                } else {
-                    cameraContext.startRecord();
-                    recordBtn.setText("结束");
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    if (cameraContext != null) {
+                        final String text;
+                        if (cameraContext.isRecording()) {
+                            cameraContext.stopRecord();
+                            text = "录像";
+                        } else {
+                            cameraContext.startRecord();
+                            text = "结束";
+                        }
+
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                recordBtn.setText(text);
+                            }
+                        });
+                    }
                 }
-            }
+            });
         }
     }
 
