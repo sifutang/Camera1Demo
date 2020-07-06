@@ -1,0 +1,99 @@
+package com.example.cameraonedemo.activity;
+
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
+
+import android.os.Build;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+import android.view.View;
+import android.widget.Button;
+import android.widget.Toast;
+
+import com.example.cameraonedemo.R;
+import com.example.cameraonedemo.camera.api2.CameraContext;
+
+@RequiresApi(api = Build.VERSION_CODES.M)
+public class Camera2Activity extends AppCompatActivity
+        implements SurfaceHolder.Callback, View.OnClickListener {
+
+    private static final String TAG = "Camera2Activity";
+
+    private CameraContext cameraContext;
+    private Button recordBtn;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_camera);
+
+        SurfaceView surfaceView = findViewById(R.id.surface_view);
+        surfaceView.getHolder().addCallback(this);
+
+        recordBtn = findViewById(R.id.record_btn);
+        recordBtn.setOnClickListener(this);
+
+        findViewById(R.id.switch_btn).setOnClickListener(this);
+        findViewById(R.id.capture_btn).setOnClickListener(this);
+
+        cameraContext = new CameraContext(this);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        cameraContext.release();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+    }
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        Log.d(TAG, "surfaceCreated: ");
+        cameraContext.init();
+        cameraContext.openCamera(holder);
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        Log.d(TAG, "surfaceChanged: format = " + format + ", w = " + width + ", h = " + height);
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        Log.d(TAG, "surfaceDestroyed: ");
+    }
+
+    @Override
+    public void onClick(View v) {
+        switch (v.getId()) {
+            case R.id.record_btn:
+                if (cameraContext != null) {
+                    final String text;
+                    if (cameraContext.isRecording()) {
+                        cameraContext.stopRecord();
+                        text = "录像";
+                    } else {
+                        cameraContext.startRecord();
+                        text = "结束";
+                    }
+
+                    recordBtn.setText(text);
+                }
+                break;
+            default:
+                Toast.makeText(this, "not impl", Toast.LENGTH_SHORT).show();
+                break;
+        }
+    }
+}

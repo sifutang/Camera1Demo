@@ -1,4 +1,4 @@
-package com.example.cameraonedemo;
+package com.example.cameraonedemo.utils;
 
 import android.app.Activity;
 import android.graphics.Matrix;

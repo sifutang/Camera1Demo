@@ -1,4 +1,4 @@
-package com.example.cameraonedemo;
+package com.example.cameraonedemo.camera.api1;
 
 import android.app.Activity;
 import android.content.Context;
@@ -11,6 +11,8 @@ import android.util.Log;
 import android.view.OrientationEventListener;
 import android.view.SurfaceHolder;
 import android.widget.Toast;
+
+import com.example.cameraonedemo.utils.CameraUtils;
 
 import java.io.File;
 import java.io.IOException;
