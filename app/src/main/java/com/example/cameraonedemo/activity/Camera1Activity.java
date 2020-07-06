@@ -27,6 +27,7 @@ import android.widget.ImageView;
 import com.example.cameraonedemo.camera.api1.CameraContext;
 import com.example.cameraonedemo.camera.api1.CameraInfo;
 import com.example.cameraonedemo.R;
+import com.example.cameraonedemo.utils.AutoFitSurfaceView;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -38,7 +39,7 @@ public class Camera1Activity extends AppCompatActivity
     private static final int MSG_CANCEL_AUTO_FOCUS = 1000;
     private static final int MSG_TOUCH_AF_LOCK_TIME_OUT = 5000;
 
-    private SurfaceView surfaceView;
+    private AutoFitSurfaceView surfaceView;
     private ImageView pictureImageView;
     private Button recordBtn;
 

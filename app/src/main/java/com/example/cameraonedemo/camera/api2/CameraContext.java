@@ -49,6 +49,7 @@ public class CameraContext {
     private File videoFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/test.mp4");
 
     private int curCameraId = -1;
+    private String[] ids;
 
     public CameraContext(Context context) {
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
@@ -60,74 +61,82 @@ public class CameraContext {
         handler = new Handler(handlerThread.getLooper());
     }
 
-    @SuppressLint("MissingPermission")
     public void openCamera(SurfaceHolder holder) {
         surfaceHolder = holder;
 
         handler.post(new Runnable() {
             @Override
             public void run() {
-                String[] ids = null;
-                try {
-                    ids = cameraManager.getCameraIdList();
-                    Log.d(TAG, "openCamera: ids = " + Arrays.toString(ids));
-                } catch (CameraAccessException e) {
-                    e.printStackTrace();
-                }
 
-                if (ids == null || ids.length == 0) {
-                    Log.e(TAG, "openCamera: no camera id get!");
-                    return;
-                }
-
-                String backId = null;
-                for (String id : ids) {
+                if (curCameraId == -1) {
                     try {
-                        CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
-                        Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                        if (facing == null) {
-                            return;
-                        }
-
-                        if (facing == CameraMetadata.LENS_FACING_BACK) {
-                            backId = id;
-                            Log.d(TAG, "openCamera: id = " + id + " is back id");
-                        } else if (facing == CameraMetadata.LENS_FACING_FRONT) {
-                            Log.d(TAG, "openCamera: id = " + id + " is front id");
-                        }
+                        ids = cameraManager.getCameraIdList();
+                        Log.d(TAG, "openCamera: ids = " + Arrays.toString(ids));
                     } catch (CameraAccessException e) {
                         e.printStackTrace();
                     }
-                }
 
+                    if (ids == null || ids.length == 0) {
+                        Log.e(TAG, "openCamera: no camera id get!");
+                        return;
+                    }
 
-                if (backId != null) {
-                    curCameraId = Integer.parseInt(backId);
-                    try {
-                        cameraManager.openCamera(backId, new CameraDevice.StateCallback() {
-                            @Override
-                            public void onOpened(@NonNull CameraDevice camera) {
-                                Log.d(TAG, "onOpened: ");
-                                cameraDevice = camera;
-                                createSession(camera);
+                    String backId = null;
+                    for (String id : ids) {
+                        try {
+                            CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+                            Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                            if (facing == null) {
+                                return;
                             }
 
-                            @Override
-                            public void onDisconnected(@NonNull CameraDevice camera) {
-                                Log.d(TAG, "onDisconnected: ");
+                            if (facing == CameraMetadata.LENS_FACING_BACK) {
+                                backId = id;
+                                Log.d(TAG, "openCamera: id = " + id + " is back id");
+                            } else if (facing == CameraMetadata.LENS_FACING_FRONT) {
+                                Log.d(TAG, "openCamera: id = " + id + " is front id");
                             }
-
-                            @Override
-                            public void onError(@NonNull CameraDevice camera, int error) {
-                                Log.d(TAG, "onError: " + error);
-                            }
-                        }, null);
-                    } catch (CameraAccessException e) {
-                        e.printStackTrace();;
+                        } catch (CameraAccessException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    if (backId != null) {
+                        curCameraId = Integer.parseInt(backId);
                     }
                 }
+
+                openCamera();
             }
         });
+    }
+
+    @SuppressLint("MissingPermission")
+    private void openCamera() {
+        if (curCameraId != -1) {
+            Log.d(TAG, "open camera id " + curCameraId);
+            try {
+                cameraManager.openCamera(String.valueOf(curCameraId), new CameraDevice.StateCallback() {
+                    @Override
+                    public void onOpened(@NonNull CameraDevice camera) {
+                        Log.d(TAG, "onOpened: ");
+                        cameraDevice = camera;
+                        createSession(camera);
+                    }
+
+                    @Override
+                    public void onDisconnected(@NonNull CameraDevice camera) {
+                        Log.d(TAG, "onDisconnected: ");
+                    }
+
+                    @Override
+                    public void onError(@NonNull CameraDevice camera, int error) {
+                        Log.d(TAG, "onError: " + error);
+                    }
+                }, null);
+            } catch (CameraAccessException e) {
+                e.printStackTrace();;
+            }
+        }
     }
 
     public void closeCamera() {
@@ -266,7 +275,10 @@ public class CameraContext {
     private void configMediaRecorder() {
         if (mediaRecorder == null) {
             mediaRecorder = new MediaRecorder();
+        } else {
+            mediaRecorder.reset();
         }
+
         mediaRecorder.setOrientationHint(90);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
@@ -307,5 +319,25 @@ public class CameraContext {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public void switchCamera() {
+        if (ids == null || ids.length == 0) {
+            return;
+        }
+
+        int index = Arrays.asList(ids).indexOf(String.valueOf(curCameraId));
+        if (index >= 0) {
+            index = (index + 1) % ids.length;
+        }
+
+        curCameraId = Integer.parseInt(ids[index]);
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                closeCamera();
+                openCamera(surfaceHolder);
+            }
+        });
     }
 }

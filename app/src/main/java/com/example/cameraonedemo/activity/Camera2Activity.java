@@ -14,6 +14,7 @@ import android.widget.Toast;
 
 import com.example.cameraonedemo.R;
 import com.example.cameraonedemo.camera.api2.CameraContext;
+import com.example.cameraonedemo.utils.AutoFitSurfaceView;
 
 @RequiresApi(api = Build.VERSION_CODES.M)
 public class Camera2Activity extends AppCompatActivity
@@ -29,7 +30,7 @@ public class Camera2Activity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
 
-        SurfaceView surfaceView = findViewById(R.id.surface_view);
+        AutoFitSurfaceView surfaceView = findViewById(R.id.surface_view);
         surfaceView.getHolder().addCallback(this);
 
         recordBtn = findViewById(R.id.record_btn);
@@ -89,6 +90,11 @@ public class Camera2Activity extends AppCompatActivity
                     }
 
                     recordBtn.setText(text);
+                }
+                break;
+            case R.id.switch_btn:
+                if (cameraContext != null) {
+                    cameraContext.switchCamera();
                 }
                 break;
             default:

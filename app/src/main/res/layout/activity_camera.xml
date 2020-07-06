@@ -6,10 +6,10 @@
     android:layout_height="match_parent"
     tools:context=".activity.Camera1Activity">
 
-    <SurfaceView
+    <com.example.cameraonedemo.utils.AutoFitSurfaceView
         android:id="@+id/surface_view"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_width="720dp"
+        android:layout_height="1280dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
