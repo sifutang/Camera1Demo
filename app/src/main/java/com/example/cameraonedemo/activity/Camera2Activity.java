@@ -49,7 +49,6 @@ public class Camera2Activity extends AppCompatActivity
     @Override
     protected void onPause() {
         super.onPause();
-        cameraContext.release();
     }
 
     @Override
@@ -72,6 +71,7 @@ public class Camera2Activity extends AppCompatActivity
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         Log.d(TAG, "surfaceDestroyed: ");
+        cameraContext.release();
     }
 
     @Override

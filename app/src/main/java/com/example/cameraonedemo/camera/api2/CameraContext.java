@@ -145,6 +145,7 @@ public class CameraContext {
 
                     cameraDevice.close();
                     cameraDevice = null;
+                    Log.d(TAG, "closeCamera: ");
                 }
             }
         });
@@ -165,11 +166,11 @@ public class CameraContext {
                     codecSurface.release();
                     codecSurface = null;
                 }
+                Log.d(TAG, "release: ");
             }
         });
 
         if (handler != null) {
-            handler.removeCallbacksAndMessages(null);
             handlerThread.quitSafely();
             handlerThread = null;
             handler = null;
