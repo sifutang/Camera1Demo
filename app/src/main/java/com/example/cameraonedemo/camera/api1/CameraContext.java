@@ -32,7 +32,7 @@ public class CameraContext {
 
     // for video
     private MediaRecorder mediaRecorder;
-    private volatile boolean isRecording;
+    private volatile boolean isRecording = false;
     private File videoFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/test.mp4");
 
 
@@ -288,7 +288,6 @@ public class CameraContext {
 
         camera.startPreview();
         enableCaf();
-        Toast.makeText(context, "video save path = " + videoFile.getAbsolutePath(), Toast.LENGTH_LONG).show();
     }
 
     private class MyOrientationEventListener extends OrientationEventListener {

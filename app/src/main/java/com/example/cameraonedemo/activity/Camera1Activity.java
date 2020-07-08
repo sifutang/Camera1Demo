@@ -37,6 +37,7 @@ public class Camera1Activity extends AppCompatActivity
 
     private static final String TAG = "MainActivity";
     private static final int MSG_CANCEL_AUTO_FOCUS = 1000;
+    private static final int MSG_UPDATE_RECORDING_STATUS = 1001;
     private static final int MSG_TOUCH_AF_LOCK_TIME_OUT = 5000;
 
     private AutoFitSurfaceView surfaceView;
@@ -192,25 +193,18 @@ public class Camera1Activity extends AppCompatActivity
         } else if (v.getId() == R.id.picture_image_view) {
             pictureImageView.setVisibility(View.INVISIBLE);
         } else if (v.getId() == R.id.record_btn) {
+            Log.e(TAG, "onClick: record_btn");
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
                     if (cameraContext != null) {
-                        final String text;
                         if (cameraContext.isRecording()) {
                             cameraContext.stopRecord();
-                            text = "录像";
                         } else {
                             cameraContext.startRecord();
-                            text = "结束";
                         }
-
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                recordBtn.setText(text);
-                            }
-                        });
+                        final boolean isRecording = cameraContext.isRecording();
+                        mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_RECORDING_STATUS, isRecording));
                     }
                 }
             });
@@ -232,6 +226,11 @@ public class Camera1Activity extends AppCompatActivity
                         cameraContext.cancelAutoFocus();
                         cameraContext.enableCaf();
                     }
+                    break;
+                case MSG_UPDATE_RECORDING_STATUS:
+                    boolean isRecording = (Boolean) msg.obj;
+                    Log.e(TAG, "dispatchMessage: MSG_UPDATE_RECORDING_STATUS isRecording = " + isRecording);
+                    recordBtn.setText(isRecording ? "结束" : "录像");
                     break;
             }
         }
