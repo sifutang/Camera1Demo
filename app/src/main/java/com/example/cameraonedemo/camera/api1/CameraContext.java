@@ -3,13 +3,13 @@ package com.example.cameraonedemo.camera.api1;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Rect;
+import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.os.Environment;
 import android.util.Log;
 import android.view.OrientationEventListener;
-import android.view.SurfaceHolder;
 import android.widget.Toast;
 
 import com.example.cameraonedemo.utils.CameraUtils;
@@ -28,7 +28,7 @@ public class CameraContext {
     private Camera.Parameters parameters;
     private CameraInfo currCameraInfo;
     private MyOrientationEventListener orientationEventListener;
-    private SurfaceHolder surfaceHolder;
+    private SurfaceTexture surfaceTexture;
 
     // for video
     private MediaRecorder mediaRecorder;
@@ -60,8 +60,8 @@ public class CameraContext {
         orientationEventListener = new MyOrientationEventListener(context);
     }
 
-    public void configSurfaceHolder(SurfaceHolder holder) {
-        surfaceHolder = holder;
+    public void configSurfaceTexture(SurfaceTexture surfaceTexture) {
+        this.surfaceTexture = surfaceTexture;
     }
 
     public void resume() {
@@ -103,7 +103,7 @@ public class CameraContext {
 
         displayOrientation = 0;
         try {
-            camera.setPreviewDisplay(surfaceHolder);
+            camera.setPreviewTexture(surfaceTexture);
             displayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) context, cameraId);
             camera.setDisplayOrientation(displayOrientation);
         } catch (IOException e) {

@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
@@ -19,7 +20,7 @@ import android.os.Message;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
-import android.view.SurfaceView;
+import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -27,20 +28,20 @@ import android.widget.ImageView;
 import com.example.cameraonedemo.camera.api1.CameraContext;
 import com.example.cameraonedemo.camera.api1.CameraInfo;
 import com.example.cameraonedemo.R;
-import com.example.cameraonedemo.utils.AutoFitSurfaceView;
+import com.example.cameraonedemo.utils.AutoFitTextureView;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Camera1Activity extends AppCompatActivity
-        implements SurfaceHolder.Callback, View.OnClickListener {
+        implements TextureView.SurfaceTextureListener, View.OnClickListener {
 
     private static final String TAG = "MainActivity";
     private static final int MSG_CANCEL_AUTO_FOCUS = 1000;
     private static final int MSG_UPDATE_RECORDING_STATUS = 1001;
     private static final int MSG_TOUCH_AF_LOCK_TIME_OUT = 5000;
 
-    private AutoFitSurfaceView surfaceView;
+    private AutoFitTextureView textureView;
     private ImageView pictureImageView;
     private Button recordBtn;
 
@@ -54,10 +55,9 @@ public class Camera1Activity extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_camera);
+        setContentView(R.layout.activity_camera_texture_view);
 
-        surfaceView = findViewById(R.id.surface_view);
-        surfaceView.getHolder().addCallback(this);
+        textureView = findViewById(R.id.texture_view);
 
         pictureImageView = findViewById(R.id.picture_image_view);
         pictureImageView.setOnClickListener(this);
@@ -108,12 +108,12 @@ public class Camera1Activity extends AppCompatActivity
     }
 
     @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        final SurfaceHolder surfaceHolder = holder;
+    public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+        final SurfaceTexture surfaceTexture = surface;
         executor.submit(new Runnable() {
             @Override
             public void run() {
-                cameraContext.configSurfaceHolder(surfaceHolder);
+                cameraContext.configSurfaceTexture(surfaceTexture);
                 cameraContext.openCamera(currentCameraIdType);
             }
         });
@@ -121,12 +121,12 @@ public class Camera1Activity extends AppCompatActivity
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+    public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
         final int previewW = width;
         final int previewH = height;
-        Log.d(TAG, "surfaceChanged: format = " + format + ",w = " + width + ", h = " + height);
+        Log.d(TAG, "surfaceChanged: w = " + width + ", h = " + height);
 
-        surfaceView.setOnTouchListener(new View.OnTouchListener() {
+        textureView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 final int x = (int) event.getX();
@@ -150,8 +150,14 @@ public class Camera1Activity extends AppCompatActivity
     }
 
     @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.d(TAG, "surfaceDestroyed: ");
+    public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+        Log.d(TAG, "onSurfaceTextureDestroyed: ");
+        return false;
+    }
+
+    @Override
+    public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+        Log.d(TAG, "onSurfaceTextureUpdated: ");
     }
 
     @Override
