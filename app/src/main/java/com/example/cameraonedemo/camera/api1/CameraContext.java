@@ -298,6 +298,10 @@ public class CameraContext {
 
         @Override
         public void onOrientationChanged(int orientation) {
+            if (currCameraInfo == null) {
+                return;
+            }
+
             if (orientation == ORIENTATION_UNKNOWN) return;
             orientation = (orientation + 45) / 90 * 90;
             int degrees;

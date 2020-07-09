@@ -19,7 +19,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.view.MotionEvent;
-import android.view.SurfaceHolder;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
@@ -58,6 +57,7 @@ public class Camera1Activity extends AppCompatActivity
         setContentView(R.layout.activity_camera_texture_view);
 
         textureView = findViewById(R.id.texture_view);
+        textureView.setSurfaceTextureListener(this);
 
         pictureImageView = findViewById(R.id.picture_image_view);
         pictureImageView.setOnClickListener(this);
