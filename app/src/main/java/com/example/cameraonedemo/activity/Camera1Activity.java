@@ -12,6 +12,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
+import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -28,23 +29,27 @@ import com.example.cameraonedemo.camera.api1.CameraContext;
 import com.example.cameraonedemo.camera.api1.CameraInfo;
 import com.example.cameraonedemo.R;
 import com.example.cameraonedemo.utils.AutoFitTextureView;
+import com.example.cameraonedemo.utils.TextureHelper;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class Camera1Activity extends AppCompatActivity
-        implements TextureView.SurfaceTextureListener, View.OnClickListener {
+import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.opengles.GL10;
+
+public class Camera1Activity extends AppCompatActivity implements View.OnClickListener {
 
     private static final String TAG = "MainActivity";
     private static final int MSG_CANCEL_AUTO_FOCUS = 1000;
     private static final int MSG_UPDATE_RECORDING_STATUS = 1001;
     private static final int MSG_TOUCH_AF_LOCK_TIME_OUT = 5000;
 
-    private AutoFitTextureView textureView;
+    private GLSurfaceView glSurfaceView;
     private ImageView pictureImageView;
     private Button recordBtn;
 
     private CameraContext cameraContext;
+    private MyRender render;
     private int currentCameraIdType = Camera.CameraInfo.CAMERA_FACING_BACK;
 
     private ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -56,8 +61,11 @@ public class Camera1Activity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera_texture_view);
 
-        textureView = findViewById(R.id.texture_view);
-        textureView.setSurfaceTextureListener(this);
+        glSurfaceView = findViewById(R.id.gl_surface_view);
+        glSurfaceView.setEGLContextClientVersion(2);
+        glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+        render = new MyRender();
+        glSurfaceView.setRenderer(render);
 
         pictureImageView = findViewById(R.id.picture_image_view);
         pictureImageView.setOnClickListener(this);
@@ -105,59 +113,7 @@ public class Camera1Activity extends AppCompatActivity
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
-    }
-
-    @Override
-    public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-        final SurfaceTexture surfaceTexture = surface;
-        executor.submit(new Runnable() {
-            @Override
-            public void run() {
-                cameraContext.configSurfaceTexture(surfaceTexture);
-                cameraContext.openCamera(currentCameraIdType);
-            }
-        });
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    @Override
-    public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-        final int previewW = width;
-        final int previewH = height;
-        Log.d(TAG, "surfaceChanged: w = " + width + ", h = " + height);
-
-        textureView.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                final int x = (int) event.getX();
-                final int y = (int) event.getY();
-                final boolean isMirror = currentCameraIdType == Camera.CameraInfo.CAMERA_FACING_FRONT;
-
-                mainHandler.removeMessages(MSG_CANCEL_AUTO_FOCUS);
-                executor.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (cameraContext != null) {
-                            cameraContext.onTouchAF(x, y, 200, 200, previewW, previewH, isMirror);
-                        }
-                    }
-                });
-                mainHandler.sendEmptyMessageDelayed(MSG_CANCEL_AUTO_FOCUS, MSG_TOUCH_AF_LOCK_TIME_OUT);
-
-                return false;
-            }
-        });
-    }
-
-    @Override
-    public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-        Log.d(TAG, "onSurfaceTextureDestroyed: ");
-        return false;
-    }
-
-    @Override
-    public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-        Log.d(TAG, "onSurfaceTextureUpdated: ");
+        render.release();
     }
 
     @Override
@@ -239,6 +195,63 @@ public class Camera1Activity extends AppCompatActivity
                     recordBtn.setText(isRecording ? "结束" : "录像");
                     break;
             }
+        }
+    }
+
+    private class MyRender implements GLSurfaceView.Renderer {
+
+        private int textureId = -1;
+
+        @Override
+        public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+            textureId = TextureHelper.createOesTexture();
+            final SurfaceTexture surfaceTexture = new SurfaceTexture(textureId);
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    cameraContext.configSurfaceTexture(surfaceTexture);
+                    cameraContext.openCamera(currentCameraIdType);
+                }
+            });
+        }
+
+        @SuppressLint("ClickableViewAccessibility")
+        @Override
+        public void onSurfaceChanged(GL10 gl, int width, int height) {
+            final int previewW = width;
+            final int previewH = height;
+            Log.d(TAG, "surfaceChanged: w = " + width + ", h = " + height);
+
+            glSurfaceView.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    final int x = (int) event.getX();
+                    final int y = (int) event.getY();
+                    final boolean isMirror = currentCameraIdType == Camera.CameraInfo.CAMERA_FACING_FRONT;
+
+                    mainHandler.removeMessages(MSG_CANCEL_AUTO_FOCUS);
+                    executor.submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (cameraContext != null) {
+                                cameraContext.onTouchAF(x, y, 200, 200, previewW, previewH, isMirror);
+                            }
+                        }
+                    });
+                    mainHandler.sendEmptyMessageDelayed(MSG_CANCEL_AUTO_FOCUS, MSG_TOUCH_AF_LOCK_TIME_OUT);
+
+                    return false;
+                }
+            });
+        }
+
+        @Override
+        public void onDrawFrame(GL10 gl) {
+
+        }
+
+        public void release() {
+            TextureHelper.deleteTexture(textureId);
         }
     }
 }
