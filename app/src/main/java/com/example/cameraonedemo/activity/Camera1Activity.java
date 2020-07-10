@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.pm.PackageManager;
 
 import android.graphics.Bitmap;
@@ -20,7 +21,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.view.MotionEvent;
-import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -28,7 +28,7 @@ import android.widget.ImageView;
 import com.example.cameraonedemo.camera.api1.CameraContext;
 import com.example.cameraonedemo.camera.api1.CameraInfo;
 import com.example.cameraonedemo.R;
-import com.example.cameraonedemo.utils.AutoFitTextureView;
+import com.example.cameraonedemo.camera.render.CameraRender;
 import com.example.cameraonedemo.utils.TextureHelper;
 
 import java.util.concurrent.ExecutorService;
@@ -63,8 +63,7 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
 
         glSurfaceView = findViewById(R.id.gl_surface_view);
         glSurfaceView.setEGLContextClientVersion(2);
-        glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
-        render = new MyRender();
+        render = new MyRender(getApplicationContext());
         glSurfaceView.setRenderer(render);
 
         pictureImageView = findViewById(R.id.picture_image_view);
@@ -198,21 +197,33 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
         }
     }
 
-    private class MyRender implements GLSurfaceView.Renderer {
+    private class MyRender implements GLSurfaceView.Renderer, SurfaceTexture.OnFrameAvailableListener {
 
         private int textureId = -1;
+        private CameraRender cameraRender;
+        private SurfaceTexture st;
+        private Context context;
+        private float[] transformMatrix = new float[16];
+
+        public MyRender(Context context) {
+            this.context = context;
+        }
 
         @Override
         public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+            Log.d(TAG, "onSurfaceCreated: ");
             textureId = TextureHelper.createOesTexture();
-            final SurfaceTexture surfaceTexture = new SurfaceTexture(textureId);
+            st = new SurfaceTexture(textureId);
+            cameraContext.configSurfaceTexture(st);
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
-                    cameraContext.configSurfaceTexture(surfaceTexture);
                     cameraContext.openCamera(currentCameraIdType);
                 }
             });
+            cameraRender = new CameraRender(context);
+            st.setOnFrameAvailableListener(this);
+            glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         }
 
         @SuppressLint("ClickableViewAccessibility")
@@ -247,10 +258,19 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
 
         @Override
         public void onDrawFrame(GL10 gl) {
+            st.updateTexImage();
+            st.getTransformMatrix(transformMatrix);
+            cameraRender.drawTexture(transformMatrix, textureId);
+        }
 
+        @Override
+        public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+            glSurfaceView.requestRender();
         }
 
         public void release() {
+            Log.d(TAG, "release: ");
+            st.release();
             TextureHelper.deleteTexture(textureId);
         }
     }

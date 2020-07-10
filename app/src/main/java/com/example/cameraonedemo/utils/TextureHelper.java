@@ -23,7 +23,7 @@ public class TextureHelper {
         GLES20.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL10.GL_TEXTURE_WRAP_T, GL10.GL_CLAMP_TO_EDGE);
 
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
-        Log.d(TAG, "createOESTextureObject: texture id ${tex[0]}");
+        Log.d(TAG, "createOESTextureObject: texture id " + textureObjects[0]);
         return textureObjects[0];
     }
 

@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
-public class TextureResourceReader {
+public class TextResourceReader {
 
     public static String readTextFileFromResource(Context context, int resId) throws IOException {
         InputStream inputStream = context.getResources().openRawResource(resId);
