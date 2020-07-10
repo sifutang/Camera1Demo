@@ -66,6 +66,10 @@ public class CameraContext {
         orientationEventListener = new MyOrientationEventListener(context);
     }
 
+    public void setSurfaceTexture(SurfaceTexture surfaceTexture) {
+        this.surfaceTexture = surfaceTexture;
+    }
+
     public void setPreviewCallback(PreviewCallback callback) {
         this.callback = callback;
     }
@@ -108,20 +112,24 @@ public class CameraContext {
         camera.setParameters(parameters);
 
         displayOrientation = 0;
+        try {
+            camera.setPreviewTexture(surfaceTexture);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         camera.setPreviewCallback(new Camera.PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
-                Log.d(TAG, "onPreviewFrame: ");
                 if (callback != null) {
                     callback.onPreviewFrame(data);
                 }
-//                camera.addCallbackBuffer(data);
             }
         });
         displayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) context, cameraId);
         camera.setDisplayOrientation(displayOrientation);
         camera.startPreview();
-        Log.d(TAG, "openCamera: " + currCameraInfo);
+        Camera.Size previewSize = parameters.getPreviewSize();
+        Log.d(TAG, "openCamera: " + currCameraInfo + ", preview w = " + previewSize.width + ", h = " + previewSize.height);
     }
 
     public void capture(final PictureCallback callback) {

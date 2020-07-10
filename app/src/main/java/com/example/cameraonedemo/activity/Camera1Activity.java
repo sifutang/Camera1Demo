@@ -14,6 +14,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.opengl.GLSurfaceView;
+import android.opengl.Matrix;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -198,14 +199,15 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
         }
     }
 
-    private class MyRender implements GLSurfaceView.Renderer, CameraContext.PreviewCallback {
+    private class MyRender implements GLSurfaceView.Renderer,
+            CameraContext.PreviewCallback {
 
         private int textureId = -1;
-        private CameraRender cameraRender;
         private Context context;
         private float[] transformMatrix = new float[16];
         private YUVRender render;
         private byte[] previewBuffer;
+        private SurfaceTexture surfaceTexture;
 
         public MyRender(Context context) {
             this.context = context;
@@ -213,18 +215,21 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
 
         @Override
         public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+            textureId = TextureHelper.createOesTexture();
+            surfaceTexture = new SurfaceTexture(textureId);
             Log.d(TAG, "onSurfaceCreated: ");
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
+                    cameraContext.setSurfaceTexture(surfaceTexture);
                     cameraContext.openCamera(currentCameraIdType);
                 }
             });
-            cameraRender = new CameraRender(context);
             glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
             render = new YUVRender(context);
             render.onSurfaceCreated(gl, config);
             cameraContext.setPreviewCallback(this);
+            Matrix.setIdentityM(transformMatrix, 0);
         }
 
         @SuppressLint("ClickableViewAccessibility")
@@ -262,19 +267,19 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
         public void onDrawFrame(GL10 gl) {
             if (previewBuffer != null) {
                 render.updateBuffer(previewBuffer);
-                render.onDrawFrame(gl);
+                render.onDrawFrame(gl, transformMatrix);
             }
         }
 
         @Override
         public void onPreviewFrame(byte[] data) {
-            Log.d(TAG, "onPreviewFrame: ");
             previewBuffer = data;
             glSurfaceView.requestRender();
         }
 
         public void release() {
             Log.d(TAG, "release: ");
+            surfaceTexture.release();
             TextureHelper.deleteTexture(textureId);
         }
     }

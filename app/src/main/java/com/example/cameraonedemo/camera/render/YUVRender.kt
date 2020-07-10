@@ -2,7 +2,6 @@ package com.example.cameraonedemo.camera.render
 
 import android.content.Context
 import android.opengl.GLES20
-import android.opengl.Matrix
 import android.util.Log
 import com.example.cameraonedemo.R
 import com.example.cameraonedemo.utils.ShaderHelper
@@ -44,10 +43,8 @@ class YUVRender(context: Context) {
 
     private var vertexBuffer: FloatBuffer? = null
 
-    private var matrix = FloatArray(16)
-
-    private val imageWidth = 800
-    private val imageHeight = 480
+    private var imageWidth = 1920
+    private var imageHeight = 1080
     private var yTextureId = -1
     private var uTextureId = -1
     private var vTextureId = -1
@@ -61,7 +58,7 @@ class YUVRender(context: Context) {
     private lateinit var vBuffer: ByteBuffer
     private lateinit var uvBuffer: ByteBuffer
 
-    fun onDrawFrame(gl: GL10?) {
+    fun onDrawFrame(gl: GL10?, matrix: FloatArray) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
 
@@ -106,13 +103,10 @@ class YUVRender(context: Context) {
     }
 
     fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+//        imageWidth = width
+//        imageHeight = height
         Log.d(TAG, "onSurfaceChanged: width = $width, height = $height")
-        GLES20.glViewport(0, 0, width, height)
-
-        Matrix.setIdentityM(matrix, 0)
-        val sx = 1f * imageWidth / width
-        val sy = 1f * imageHeight / height
-        Matrix.scaleM(matrix, 0, sx, sy, 1f)
+//        GLES20.glViewport(0, 0, width, height)
     }
 
     fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -170,10 +164,13 @@ class YUVRender(context: Context) {
     }
 
     public fun updateBuffer(data: ByteArray) {
+        imageBytes = data
         if (YUV_TYPE == YUV_TYPE_NV21) {
+            yBuffer.clear()
             yBuffer.put(imageBytes, 0, imageWidth * imageHeight)
             yBuffer.position(0)
 
+            uvBuffer.clear()
             uvBuffer.put(imageBytes, imageWidth * imageHeight, imageWidth * imageHeight / 2)
             uvBuffer.position(0)
             textureLuminance(yBuffer, imageWidth, imageHeight, yTextureId)
