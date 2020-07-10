@@ -39,6 +39,12 @@ public class CameraContext {
     private int displayOrientation;
     private int rotation;
 
+    public interface PreviewCallback {
+        void onPreviewFrame(byte[] data);
+    }
+
+    private PreviewCallback callback;
+
     private Camera.AutoFocusMoveCallback cafCallback = new Camera.AutoFocusMoveCallback() {
         @Override
         public void onAutoFocusMoving(boolean start, Camera camera) {
@@ -60,8 +66,8 @@ public class CameraContext {
         orientationEventListener = new MyOrientationEventListener(context);
     }
 
-    public void configSurfaceTexture(SurfaceTexture surfaceTexture) {
-        this.surfaceTexture = surfaceTexture;
+    public void setPreviewCallback(PreviewCallback callback) {
+        this.callback = callback;
     }
 
     public void resume() {
@@ -102,13 +108,18 @@ public class CameraContext {
         camera.setParameters(parameters);
 
         displayOrientation = 0;
-        try {
-            camera.setPreviewTexture(surfaceTexture);
-            displayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) context, cameraId);
-            camera.setDisplayOrientation(displayOrientation);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        camera.setPreviewCallback(new Camera.PreviewCallback() {
+            @Override
+            public void onPreviewFrame(byte[] data, Camera camera) {
+                Log.d(TAG, "onPreviewFrame: ");
+                if (callback != null) {
+                    callback.onPreviewFrame(data);
+                }
+//                camera.addCallbackBuffer(data);
+            }
+        });
+        displayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) context, cameraId);
+        camera.setDisplayOrientation(displayOrientation);
         camera.startPreview();
         Log.d(TAG, "openCamera: " + currCameraInfo);
     }

@@ -29,6 +29,7 @@ import com.example.cameraonedemo.camera.api1.CameraContext;
 import com.example.cameraonedemo.camera.api1.CameraInfo;
 import com.example.cameraonedemo.R;
 import com.example.cameraonedemo.camera.render.CameraRender;
+import com.example.cameraonedemo.camera.render.YUVRender;
 import com.example.cameraonedemo.utils.TextureHelper;
 
 import java.util.concurrent.ExecutorService;
@@ -197,13 +198,14 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
         }
     }
 
-    private class MyRender implements GLSurfaceView.Renderer, SurfaceTexture.OnFrameAvailableListener {
+    private class MyRender implements GLSurfaceView.Renderer, CameraContext.PreviewCallback {
 
         private int textureId = -1;
         private CameraRender cameraRender;
-        private SurfaceTexture st;
         private Context context;
         private float[] transformMatrix = new float[16];
+        private YUVRender render;
+        private byte[] previewBuffer;
 
         public MyRender(Context context) {
             this.context = context;
@@ -212,9 +214,6 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
         @Override
         public void onSurfaceCreated(GL10 gl, EGLConfig config) {
             Log.d(TAG, "onSurfaceCreated: ");
-            textureId = TextureHelper.createOesTexture();
-            st = new SurfaceTexture(textureId);
-            cameraContext.configSurfaceTexture(st);
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
@@ -222,13 +221,16 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
                 }
             });
             cameraRender = new CameraRender(context);
-            st.setOnFrameAvailableListener(this);
             glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+            render = new YUVRender(context);
+            render.onSurfaceCreated(gl, config);
+            cameraContext.setPreviewCallback(this);
         }
 
         @SuppressLint("ClickableViewAccessibility")
         @Override
         public void onSurfaceChanged(GL10 gl, int width, int height) {
+            render.onSurfaceChanged(gl, width, height);
             final int previewW = width;
             final int previewH = height;
             Log.d(TAG, "surfaceChanged: w = " + width + ", h = " + height);
@@ -258,19 +260,21 @@ public class Camera1Activity extends AppCompatActivity implements View.OnClickLi
 
         @Override
         public void onDrawFrame(GL10 gl) {
-            st.updateTexImage();
-            st.getTransformMatrix(transformMatrix);
-            cameraRender.drawTexture(transformMatrix, textureId);
+            if (previewBuffer != null) {
+                render.updateBuffer(previewBuffer);
+                render.onDrawFrame(gl);
+            }
         }
 
         @Override
-        public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+        public void onPreviewFrame(byte[] data) {
+            Log.d(TAG, "onPreviewFrame: ");
+            previewBuffer = data;
             glSurfaceView.requestRender();
         }
 
         public void release() {
             Log.d(TAG, "release: ");
-            st.release();
             TextureHelper.deleteTexture(textureId);
         }
     }
