@@ -1,6 +1,8 @@
 # Camera1Demo
-camera1 api use case
+camera1/camera2 api use case
 
-Camera API1的相关知识分享首发于微信公众号"雪月清的随笔"
+remotes/origin/dev_camera_one_gl_surface_view: OpenGL绘制相机预览/Camera1 api
 
-欢迎关注交流
+remotes/origin/dev_camera_one_texture_view: TextureView显示相机预览/Camera1 api
+
+
