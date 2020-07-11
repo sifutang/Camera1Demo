@@ -19,7 +19,6 @@ import android.os.Message;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -27,6 +26,7 @@ import android.widget.ImageView;
 import com.example.cameraonedemo.camera.api1.CameraContext;
 import com.example.cameraonedemo.camera.api1.CameraInfo;
 import com.example.cameraonedemo.R;
+import com.example.cameraonedemo.encoder.VideoEncoder;
 import com.example.cameraonedemo.utils.AutoFitSurfaceView;
 
 import java.util.concurrent.ExecutorService;
@@ -38,11 +38,14 @@ public class Camera1Activity extends AppCompatActivity
     private static final String TAG = "MainActivity";
     private static final int MSG_CANCEL_AUTO_FOCUS = 1000;
     private static final int MSG_UPDATE_RECORDING_STATUS = 1001;
+    private static final int MSG_UPDATE_CODEC_STATUS = 1002;
     private static final int MSG_TOUCH_AF_LOCK_TIME_OUT = 5000;
 
     private AutoFitSurfaceView surfaceView;
     private ImageView pictureImageView;
     private Button recordBtn;
+    private Button codecBtn;
+    private VideoEncoder videoEncoder;
 
     private CameraContext cameraContext;
     private int currentCameraIdType = Camera.CameraInfo.CAMERA_FACING_BACK;
@@ -64,6 +67,10 @@ public class Camera1Activity extends AppCompatActivity
 
         findViewById(R.id.switch_btn).setOnClickListener(this);
         findViewById(R.id.capture_btn).setOnClickListener(this);
+
+
+        codecBtn = findViewById(R.id.codec_btn);
+        codecBtn.setOnClickListener(this);
 
         recordBtn = findViewById(R.id.record_btn);
         recordBtn.setOnClickListener(this);
@@ -208,6 +215,45 @@ public class Camera1Activity extends AppCompatActivity
                     }
                 }
             });
+        } else if (v.getId() == R.id.codec_btn) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                if (videoEncoder == null) {
+                    videoEncoder = new VideoEncoder(cameraContext.getPreviewWidth(), cameraContext.getPreviewHeight());
+                }
+
+                if (!videoEncoder.isStart()) {
+                    cameraContext.setPreviewCallback(new CameraContext.PreviewCallback() {
+                        @Override
+                        public void onPreviewFrame(byte[] data) {
+                            videoEncoder.addVideoData(data);
+                        }
+                    });
+                    videoEncoder.setVideoEncodeListener(new VideoEncoder.VideoEncodeListener() {
+                        @Override
+                        public void onVideoEncodeStart() {
+                            Log.d(TAG, "onVideoEncodeStart: ");
+                            mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_CODEC_STATUS, true));
+                        }
+
+                        @Override
+                        public void onVideoEncodeEnd() {
+                            mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_CODEC_STATUS, false));
+                            mainHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    videoEncoder.release();
+                                    videoEncoder = null;
+                                }
+                            });
+                            Log.d(TAG, "onVideoEncodeEnd: ");
+                        }
+                    });
+                    videoEncoder.start();
+                } else {
+                    cameraContext.setPreviewCallback(null);
+                    videoEncoder.stop();
+                }
+            }
         }
     }
 
@@ -231,6 +277,11 @@ public class Camera1Activity extends AppCompatActivity
                     boolean isRecording = (Boolean) msg.obj;
                     Log.e(TAG, "dispatchMessage: MSG_UPDATE_RECORDING_STATUS isRecording = " + isRecording);
                     recordBtn.setText(isRecording ? "结束" : "录像");
+                    break;
+                case MSG_UPDATE_CODEC_STATUS:
+                    boolean isCodec = (Boolean) msg.obj;
+                    Log.e(TAG, "dispatchMessage: MSG_UPDATE_CODEC_STATUS isCodec = " + isCodec);
+                    codecBtn.setText(isCodec ? "结束" : "硬编");
                     break;
             }
         }

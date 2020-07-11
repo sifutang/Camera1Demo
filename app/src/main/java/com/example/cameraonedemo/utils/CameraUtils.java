@@ -73,5 +73,22 @@ public class CameraUtils {
         return amount < low ? low : (amount > high ? high : amount);
     }
 
-
+    /**
+     * convert nv21 to nv12
+     * nv21: YYYY YYYY vu vu
+     * nv12: YYYY YYYY uv uv
+     * @param nv21
+     * @param width
+     * @param height
+     */
+    public static void nv21ToNv12(byte[] nv21, int width, int height) {
+        byte temp;
+        for (int i = width * height; i < nv21.length; i++) {
+            if ((i + 1) % 2 == 0) {
+                temp = nv21[i - 1];
+                nv21[i - 1] = nv21[i];
+                nv21[i] = temp;
+            }
+        }
+    }
 }

@@ -38,6 +38,13 @@ public class CameraContext {
 
     private int displayOrientation;
     private int rotation;
+    private int previewWidth = 1920;
+    private int previewHeight = 1080;
+
+    public interface PreviewCallback {
+        void onPreviewFrame(byte[] data);
+    };
+    private PreviewCallback callback;
 
     private Camera.AutoFocusMoveCallback cafCallback = new Camera.AutoFocusMoveCallback() {
         @Override
@@ -64,6 +71,10 @@ public class CameraContext {
         surfaceHolder = holder;
     }
 
+    public void setPreviewCallback(PreviewCallback callback) {
+        this.callback = callback;
+    }
+
     public void resume() {
         orientationEventListener.enable();
     }
@@ -72,6 +83,13 @@ public class CameraContext {
         orientationEventListener.disable();
     }
 
+    public int getPreviewHeight() {
+        return previewHeight;
+    }
+
+    public int getPreviewWidth() {
+        return previewWidth;
+    }
 
     public void openCamera(int type) {
         currCameraInfo = new CameraInfo(type);
@@ -92,7 +110,7 @@ public class CameraContext {
         for (Camera.Size size: pictureSizeList) {
             Log.d(TAG, "video size w " + size.width + ", h = " + size.height);
         }
-        parameters.setPreviewSize(1920, 1080);
+        parameters.setPreviewSize(previewWidth, previewHeight);
         parameters.setPictureSize(800, 600);
 
         if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
@@ -109,6 +127,15 @@ public class CameraContext {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        camera.setPreviewCallback(new Camera.PreviewCallback() {
+            @Override
+            public void onPreviewFrame(byte[] data, Camera camera) {
+                if (callback != null) {
+                    callback.onPreviewFrame(data);
+                }
+            }
+        });
         camera.startPreview();
         Log.d(TAG, "openCamera: " + currCameraInfo);
     }
@@ -209,6 +236,7 @@ public class CameraContext {
 
     public void closeCamera() {
         if (camera != null) {
+            camera.setPreviewCallback(null);
             camera.stopPreview();
             camera.release();
             camera = null;
