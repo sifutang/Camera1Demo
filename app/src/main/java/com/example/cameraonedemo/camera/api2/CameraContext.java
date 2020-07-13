@@ -147,6 +147,7 @@ public class CameraContext {
                     try {
                         if (cameraCaptureSession != null) {
                             cameraCaptureSession.abortCaptures();
+                            cameraCaptureSession.close();
                         }
                     } catch (CameraAccessException e) {
                         e.printStackTrace();
