@@ -5,7 +5,12 @@ import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.hardware.Camera;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraMetadata;
+import android.os.Build;
 import android.view.Surface;
+
+import androidx.annotation.RequiresApi;
 
 public class CameraUtils {
 
@@ -90,5 +95,36 @@ public class CameraUtils {
                 nv21[i] = temp;
             }
         }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static boolean isSupportAutoFocus(CameraCharacteristics characteristics) {
+        if (characteristics == null) {
+            return false;
+        }
+
+        int[] availableAfModes = characteristics.get(
+                CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES
+        );
+        if (availableAfModes == null) {
+            return false;
+        }
+
+        boolean result = false;
+        loop:
+        for (int mode: availableAfModes) {
+            switch (mode) {
+                case CameraMetadata.CONTROL_AF_MODE_AUTO:
+                case CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE:
+                case CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO:
+                    result = true;
+                    break loop;
+                default:
+                    break;
+
+            }
+        }
+
+        return result;
     }
 }

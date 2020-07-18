@@ -120,6 +120,7 @@ public class Camera2Activity extends AppCompatActivity
                     recordBtn.setText(text);
                 }
                 break;
+
             case R.id.switch_btn:
                 if (cameraContext != null) {
                     cameraContext.switchCamera();
@@ -134,6 +135,12 @@ public class Camera2Activity extends AppCompatActivity
                     text = FLASH_OPTIONAL_SET[index];
                     flashOptionalBtn.setText(text);
                     cameraContext.switchFlashMode(text);
+                }
+                break;
+
+            case R.id.capture_btn:
+                if (cameraContext != null) {
+                    cameraContext.capture();
                 }
                 break;
             default:

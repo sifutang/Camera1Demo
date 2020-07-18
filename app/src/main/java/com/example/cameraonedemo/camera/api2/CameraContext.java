@@ -27,6 +27,8 @@ import android.view.SurfaceHolder;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
+import com.example.cameraonedemo.utils.CameraUtils;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -46,6 +48,9 @@ public class CameraContext {
             new MeteringRectangle(0, 0, 0, 0, 0)
     };
 
+    private static final int STATUS_IDLE = 0;
+    private static final int STATUS_WAITING_FOR_SHOT = 1;
+
     private HandlerThread handlerThread;
     private Handler handler;
 
@@ -63,6 +68,11 @@ public class CameraContext {
 
     private int curCameraId = -1;
     private String[] ids;
+    private String currentFlashMode = CameraContext.FLASH_MODE_OFF;
+
+    private boolean isAutoFocusCanDo = false;
+    private boolean sendAePreCaptureRequest = false;
+    private int status = STATUS_IDLE;
 
     private CameraCaptureSession.CaptureCallback previewCallback = new CameraCaptureSession.CaptureCallback() {
 
@@ -112,6 +122,34 @@ public class CameraContext {
             mAeState = aeState;
             mFlashMode = flashMode;
             mFlashState = flashState;
+
+            if (status == STATUS_WAITING_FOR_SHOT) {
+                boolean isAfStateOk = afState != null &&
+                        (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
+                        || afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED);
+                if (isAfStateOk) {
+                    boolean isAeStateOk = aeState != null &&
+                            (aeState == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
+                                    || aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED
+                                    || aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE);
+                    boolean isNeedPreCapture = (aeState != null
+                            && aeState == CaptureRequest.CONTROL_AE_STATE_FLASH_REQUIRED
+                            && CameraContext.FLASH_MODE_AUTO.equals(currentFlashMode))
+                            || CameraContext.FLASH_MODE_ON.equals(currentFlashMode);
+                    Log.e(TAG, "onCaptureCompleted: af state ok, isAeStateOk = " + isAeStateOk
+                            + ", isNeedPreCapture = " + isNeedPreCapture);
+                    if (!sendAePreCaptureRequest && (!isAeStateOk || isNeedPreCapture)) {
+                        sendAePreCaptureRequest();
+                    } else {
+                        // do capture
+                        // ...
+                        Log.e(TAG, "onCaptureCompleted: send capture request, do capture");
+                        status = STATUS_IDLE;
+                        sendAePreCaptureRequest = false;
+                        resetNormalPreview();
+                    }
+                }
+            }
         }
 
         @Override
@@ -142,6 +180,34 @@ public class CameraContext {
             super.onCaptureBufferLost(session, request, target, frameNumber);
         }
     };
+
+    private void resetNormalPreview() {
+        // af
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+
+        // ae
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+
+        // effect preview
+        updatePreview(previewCaptureRequestBuilder);
+    }
+
+    private void sendAePreCaptureRequest() {
+        if (sendAePreCaptureRequest) {
+            Log.w(TAG, "sendAePreCaptureRequest: processing, filter it...");
+            return;
+        }
+
+        sendAePreCaptureRequest = true;
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
+        capture(previewCaptureRequestBuilder);
+        Log.e(TAG, "sendAePreCaptureRequest: ");
+    }
 
     public CameraContext(Context context) {
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
@@ -205,7 +271,6 @@ public class CameraContext {
     @SuppressLint("MissingPermission")
     private void openCamera() {
         if (curCameraId != -1) {
-            Log.d(TAG, "open camera id " + curCameraId);
             try {
                 cameraManager.openCamera(String.valueOf(curCameraId), new CameraDevice.StateCallback() {
                     @Override
@@ -225,9 +290,13 @@ public class CameraContext {
                         Log.d(TAG, "onError: " + error);
                     }
                 }, null);
+
+                isAutoFocusCanDo = CameraUtils.isSupportAutoFocus(
+                        cameraManager.getCameraCharacteristics(String.valueOf(curCameraId)));
             } catch (CameraAccessException e) {
                 e.printStackTrace();;
             }
+            Log.e(TAG, "open camera id " + curCameraId + ", isAutoFocusCanDo = " + isAutoFocusCanDo);
         }
     }
 
@@ -322,6 +391,7 @@ public class CameraContext {
                     builder.addTarget(codecSurface);
                     session.setRepeatingRequest(builder.build(), previewCallback, null);
                     previewCaptureRequestBuilder = builder;
+                    switchFlashMode(FLASH_MODE_OFF);
                 } catch (CameraAccessException e) {
                     e.printStackTrace();
                 }
@@ -440,6 +510,7 @@ public class CameraContext {
             return;
         }
 
+        currentFlashMode = flashMode;
         switch (flashMode) {
             case FLASH_MODE_OFF:
                 previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
@@ -465,7 +536,13 @@ public class CameraContext {
     }
 
     public void onSingleTap(float x, float y) {
+        if (isAutoFocusCanDo) {
+            onTouchAF(x, y);
+        }
         Log.d(TAG, "onSingleTap: x = " + x + ", y = " + y);
+    }
+
+    private void onTouchAF(float x, float y) {
         if (previewCaptureRequestBuilder != null) {
             handler.post(new Runnable() {
                 @Override
@@ -477,18 +554,16 @@ public class CameraContext {
                         // trigger start
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
-                        try {
-                            cameraCaptureSession.capture(previewCaptureRequestBuilder.build(), previewCallback, null);
-                        } catch (CameraAccessException e) {
-                            e.printStackTrace();
-                        }
+                        capture(previewCaptureRequestBuilder);
 
                         // trigger idle
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
 
-                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+//                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON); // look flash mode
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
 
                         // effect preview
@@ -496,6 +571,14 @@ public class CameraContext {
                     }
                 }
             });
+        }
+    }
+
+    private void capture(final CaptureRequest.Builder builder) {
+        try {
+            cameraCaptureSession.capture(builder.build(), previewCallback, null);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
         }
     }
 
@@ -510,5 +593,13 @@ public class CameraContext {
                }
            }
        });
+    }
+
+    public void capture() {
+        Log.e(TAG, "capture: start");
+        if (isAutoFocusCanDo) {
+            status = STATUS_WAITING_FOR_SHOT;
+            onTouchAF(0, 0);
+        }
     }
 }
