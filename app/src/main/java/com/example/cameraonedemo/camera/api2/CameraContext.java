@@ -36,6 +36,11 @@ import java.util.List;
 @RequiresApi(api = Build.VERSION_CODES.M)
 public class CameraContext {
 
+    public static final String FLASH_MODE_OFF = "Flash Off";
+    public static final String FLASH_MODE_AUTO = "Flash Auto";
+    public static final String FLASH_MODE_ON = "Flash On";
+    public static final String FLASH_MODE_TORCH = "Flash Torch";
+
     private static final String TAG = "CameraContext";
     private static final MeteringRectangle[] ZERO_WEIGHT_3A_REGION = new MeteringRectangle[]{
             new MeteringRectangle(0, 0, 0, 0, 0)
@@ -430,6 +435,35 @@ public class CameraContext {
         });
     }
 
+    public void switchFlashMode(String flashMode) {
+        if (flashMode == null || previewCaptureRequestBuilder == null) {
+            return;
+        }
+
+        switch (flashMode) {
+            case FLASH_MODE_OFF:
+                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                previewCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+                break;
+            case FLASH_MODE_AUTO:
+                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
+                previewCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+                break;
+            case FLASH_MODE_ON:
+                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH);
+                previewCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+                break;
+            case FLASH_MODE_TORCH:
+                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                previewCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
+                break;
+            default:
+                break;
+        }
+
+        updatePreview(previewCaptureRequestBuilder);
+    }
+
     public void onSingleTap(float x, float y) {
         Log.d(TAG, "onSingleTap: x = " + x + ", y = " + y);
         if (previewCaptureRequestBuilder != null) {
@@ -437,6 +471,9 @@ public class CameraContext {
                 @Override
                 public void run() {
                     if (previewCaptureRequestBuilder != null) {
+                        // maybe trigger cancel if previous trigger not done.
+                        // ..
+
                         // trigger start
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
@@ -453,14 +490,25 @@ public class CameraContext {
 
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
-                        try {
-                            cameraCaptureSession.setRepeatingRequest(previewCaptureRequestBuilder.build(), previewCallback, null);
-                        } catch (CameraAccessException e) {
-                            e.printStackTrace();
-                        }
+
+                        // effect preview
+                        updatePreview(previewCaptureRequestBuilder);
                     }
                 }
             });
         }
+    }
+
+    private void updatePreview(final CaptureRequest.Builder builder) {
+       handler.post(new Runnable() {
+           @Override
+           public void run() {
+               try {
+                   cameraCaptureSession.setRepeatingRequest(builder.build(), previewCallback, null);
+               } catch (CameraAccessException e) {
+                   e.printStackTrace();
+               }
+           }
+       });
     }
 }
