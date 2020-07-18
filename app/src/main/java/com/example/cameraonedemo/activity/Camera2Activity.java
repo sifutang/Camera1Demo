@@ -3,9 +3,12 @@ package com.example.cameraonedemo.activity;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.annotation.SuppressLint;
+import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -24,13 +27,14 @@ public class Camera2Activity extends AppCompatActivity
 
     private CameraContext cameraContext;
     private Button recordBtn;
+    private AutoFitSurfaceView surfaceView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
 
-        AutoFitSurfaceView surfaceView = findViewById(R.id.surface_view);
+        surfaceView = findViewById(R.id.surface_view);
         surfaceView.getHolder().addCallback(this);
 
         recordBtn = findViewById(R.id.record_btn);
@@ -64,9 +68,23 @@ public class Camera2Activity extends AppCompatActivity
         cameraContext.openCamera(holder);
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         Log.d(TAG, "surfaceChanged: format = " + format + ", w = " + width + ", h = " + height);
+
+        surfaceView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    if (cameraContext != null) {
+                        cameraContext.onSingleTap(event.getX(), event.getY());
+                    }
+                }
+
+                return false;
+            }
+        });
     }
 
     @Override

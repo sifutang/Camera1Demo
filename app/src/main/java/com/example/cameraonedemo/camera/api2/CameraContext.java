@@ -8,7 +8,11 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
+import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
+import android.hardware.camera2.TotalCaptureResult;
+import android.hardware.camera2.params.MeteringRectangle;
 import android.media.CamcorderProfile;
 import android.media.MediaCodec;
 import android.media.MediaRecorder;
@@ -33,6 +37,9 @@ import java.util.List;
 public class CameraContext {
 
     private static final String TAG = "CameraContext";
+    private static final MeteringRectangle[] ZERO_WEIGHT_3A_REGION = new MeteringRectangle[]{
+            new MeteringRectangle(0, 0, 0, 0, 0)
+    };
 
     private HandlerThread handlerThread;
     private Handler handler;
@@ -42,6 +49,7 @@ public class CameraContext {
     private CameraCaptureSession cameraCaptureSession;
     private SurfaceHolder surfaceHolder;
     private Surface codecSurface;
+    private CaptureRequest.Builder previewCaptureRequestBuilder;
 
     // for video
     private MediaRecorder mediaRecorder;
@@ -50,6 +58,85 @@ public class CameraContext {
 
     private int curCameraId = -1;
     private String[] ids;
+
+    private CameraCaptureSession.CaptureCallback previewCallback = new CameraCaptureSession.CaptureCallback() {
+
+        private Integer mAfMode = -1;
+        private Integer mAfState = -1;
+        private Integer mAeMode = -1;
+        private Integer mAeState = -1;
+        private Integer mFlashMode = -1;
+        private Integer mFlashState = -1;
+
+        @Override
+        public void onCaptureStarted(@NonNull CameraCaptureSession session,
+                                     @NonNull CaptureRequest request,
+                                     long timestamp,
+                                     long frameNumber) {
+            super.onCaptureStarted(session, request, timestamp, frameNumber);
+        }
+
+        @Override
+        public void onCaptureProgressed(@NonNull CameraCaptureSession session,
+                                        @NonNull CaptureRequest request,
+                                        @NonNull CaptureResult partialResult) {
+            super.onCaptureProgressed(session, request, partialResult);
+        }
+
+        @Override
+        public void onCaptureCompleted(@NonNull CameraCaptureSession session,
+                                       @NonNull CaptureRequest request,
+                                       @NonNull TotalCaptureResult result) {
+            super.onCaptureCompleted(session, request, result);
+            Integer afMode = result.get(CaptureResult.CONTROL_AF_MODE);
+            Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
+            Integer aeMode = result.get(CaptureResult.CONTROL_AE_MODE);
+            Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
+            Integer flashMode = result.get(CaptureResult.FLASH_MODE);
+            Integer flashState = result.get(CaptureResult.FLASH_STATE);
+            if (!mAfMode.equals(afMode) || !mAfState.equals(afState) || !mAeMode.equals(aeMode)
+                    || !mAeState.equals(aeState) || !mFlashMode.equals(flashMode) || !mFlashState.equals(flashState)) {
+                Log.i(TAG, "[onCaptureCompleted] afMode=" + afMode + ", afState=" + afState
+                        + ", aeMode=" + aeMode + ", aeState=" + aeState
+                        + ", flashMode=" + flashMode + ", flashState=" + flashState);
+            }
+
+            mAfMode = afMode;
+            mAfState = afState;
+            mAeMode = aeMode;
+            mAeState = aeState;
+            mFlashMode = flashMode;
+            mFlashState = flashState;
+        }
+
+        @Override
+        public void onCaptureFailed(@NonNull CameraCaptureSession session,
+                                    @NonNull CaptureRequest request,
+                                    @NonNull CaptureFailure failure) {
+            super.onCaptureFailed(session, request, failure);
+        }
+
+        @Override
+        public void onCaptureSequenceCompleted(@NonNull CameraCaptureSession session,
+                                               int sequenceId,
+                                               long frameNumber) {
+            super.onCaptureSequenceCompleted(session, sequenceId, frameNumber);
+        }
+
+        @Override
+        public void onCaptureSequenceAborted(@NonNull CameraCaptureSession session,
+                                             int sequenceId) {
+            super.onCaptureSequenceAborted(session, sequenceId);
+        }
+
+        @Override
+        public void onCaptureBufferLost(@NonNull CameraCaptureSession session,
+                                        @NonNull CaptureRequest request,
+                                        @NonNull Surface target,
+                                        long frameNumber) {
+            super.onCaptureBufferLost(session, request, target, frameNumber);
+        }
+    };
 
     public CameraContext(Context context) {
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
@@ -228,7 +315,8 @@ public class CameraContext {
                     builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
                     builder.addTarget(surfaceHolder.getSurface());
                     builder.addTarget(codecSurface);
-                    session.setRepeatingRequest(builder.build(), null, null);
+                    session.setRepeatingRequest(builder.build(), previewCallback, null);
+                    previewCaptureRequestBuilder = builder;
                 } catch (CameraAccessException e) {
                     e.printStackTrace();
                 }
@@ -340,5 +428,39 @@ public class CameraContext {
                 openCamera(surfaceHolder);
             }
         });
+    }
+
+    public void onSingleTap(float x, float y) {
+        Log.d(TAG, "onSingleTap: x = " + x + ", y = " + y);
+        if (previewCaptureRequestBuilder != null) {
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (previewCaptureRequestBuilder != null) {
+                        // trigger start
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+                        try {
+                            cameraCaptureSession.capture(previewCaptureRequestBuilder.build(), previewCallback, null);
+                        } catch (CameraAccessException e) {
+                            e.printStackTrace();
+                        }
+
+                        // trigger idle
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
+
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+                        try {
+                            cameraCaptureSession.setRepeatingRequest(previewCaptureRequestBuilder.build(), previewCallback, null);
+                        } catch (CameraAccessException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            });
+        }
     }
 }
