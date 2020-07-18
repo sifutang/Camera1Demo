@@ -4,6 +4,8 @@ import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.annotation.SuppressLint;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -11,6 +13,7 @@ import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.example.cameraonedemo.R;
@@ -35,6 +38,7 @@ public class Camera2Activity extends AppCompatActivity
     private AutoFitSurfaceView surfaceView;
     private Button recordBtn;
     private Button flashOptionalBtn;
+    private ImageView pictureImageView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,6 +53,9 @@ public class Camera2Activity extends AppCompatActivity
 
         flashOptionalBtn = findViewById(R.id.flash_optional_btn);
         flashOptionalBtn.setOnClickListener(this);
+
+        pictureImageView = findViewById(R.id.picture_image_view);
+        pictureImageView.setOnClickListener(this);
 
         findViewById(R.id.switch_btn).setOnClickListener(this);
         findViewById(R.id.capture_btn).setOnClickListener(this);
@@ -140,9 +147,29 @@ public class Camera2Activity extends AppCompatActivity
 
             case R.id.capture_btn:
                 if (cameraContext != null) {
-                    cameraContext.capture();
+                    cameraContext.capture(new CameraContext.PictureCallback() {
+                        @Override
+                        public void onPictureTaken(byte[] data) {
+                            final Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                            if (bitmap == null) {
+                                return;
+                            }
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    pictureImageView.setImageBitmap(bitmap);
+                                    pictureImageView.setVisibility(View.VISIBLE);
+                                }
+                            });
+                        }
+                    });
                 }
                 break;
+
+            case R.id.picture_image_view:
+                pictureImageView.setVisibility(View.INVISIBLE);
+                break;
+
             default:
                 Toast.makeText(this, "not impl", Toast.LENGTH_SHORT).show();
                 break;

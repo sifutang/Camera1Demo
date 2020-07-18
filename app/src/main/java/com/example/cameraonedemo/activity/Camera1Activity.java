@@ -179,7 +179,7 @@ public class Camera1Activity extends AppCompatActivity
                     if (cameraContext != null) {
                         cameraContext.capture(new CameraContext.PictureCallback() {
                             @Override
-                            public void onPictureTaken(byte[] data, Camera camera) {
+                            public void onPictureTaken(byte[] data) {
                                 Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
                                 if (bitmap == null) {
                                     return;

@@ -169,7 +169,7 @@ public class CameraContext {
 
                     Log.d(TAG, "onPictureTaken");
                     if (callback != null) {
-                        callback.onPictureTaken(data, camera);
+                        callback.onPictureTaken(data);
                     }
                 }
             });
@@ -343,6 +343,6 @@ public class CameraContext {
     }
 
     public interface PictureCallback {
-        void onPictureTaken(byte[] data, Camera camera);
+        void onPictureTaken(byte[] data);
     }
 }

@@ -14,6 +14,8 @@ import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.MeteringRectangle;
 import android.media.CamcorderProfile;
+import android.media.Image;
+import android.media.ImageReader;
 import android.media.MediaCodec;
 import android.media.MediaRecorder;
 import android.os.Build;
@@ -21,6 +23,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
+import android.util.Size;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 
@@ -28,9 +31,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
 import com.example.cameraonedemo.utils.CameraUtils;
+import com.example.cameraonedemo.utils.ImageReaderManager;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -61,6 +66,8 @@ public class CameraContext {
     private SurfaceHolder surfaceHolder;
     private Surface codecSurface;
     private CaptureRequest.Builder previewCaptureRequestBuilder;
+    private ImageReader jpegImageReader;
+    private Size pictureSize = new Size(800, 600);
 
     // for video
     private MediaRecorder mediaRecorder;
@@ -75,6 +82,28 @@ public class CameraContext {
     private boolean sendAePreCaptureRequest = false;
     private int status = STATUS_IDLE;
     private int aePreCaptureRequestStatus = STATUS_IDLE;
+
+    public interface PictureCallback {
+        void onPictureTaken(byte[] data);
+    }
+
+    private ImageReader.OnImageAvailableListener jpegImageAvailableListener = new ImageReader.OnImageAvailableListener() {
+        @Override
+        public void onImageAvailable(ImageReader reader) {
+            Log.d(TAG, "onImageAvailable: ");
+            Image image = reader.acquireLatestImage();
+            if (image != null) {
+                ByteBuffer byteBuffer = image.getPlanes()[0].getBuffer();
+                byte[] jpeg = new byte[byteBuffer.capacity()];
+                byteBuffer.get(jpeg);
+                if (pictureCallback != null) {
+                    pictureCallback.onPictureTaken(jpeg);
+                    pictureCallback = null;
+                }
+                image.close();
+            }
+        }
+    };
 
     private CameraCaptureSession.CaptureCallback previewCallback = new CameraCaptureSession.CaptureCallback() {
 
@@ -161,6 +190,7 @@ public class CameraContext {
                         // do capture
                         // ...
                         Log.e(TAG, "onCaptureCompleted: send capture request, do capture");
+                        doCapture();
                         status = STATUS_IDLE;
                         sendAePreCaptureRequest = false;
                         aePreCaptureRequestStatus = STATUS_IDLE;
@@ -367,6 +397,8 @@ public class CameraContext {
             handlerThread = null;
             handler = null;
         }
+
+        ImageReaderManager.getInstance().release();
     }
 
     private void createSession(final CameraDevice device) {
@@ -375,6 +407,10 @@ public class CameraContext {
         final List<Surface> surfaceList = new ArrayList<>();
         surfaceList.add(surfaceHolder.getSurface());
         surfaceList.add(codecSurface);
+        jpegImageReader = ImageReaderManager
+                .getInstance().getJpegImageReader(pictureSize.getWidth(), pictureSize.getHeight());
+        jpegImageReader.setOnImageAvailableListener(jpegImageAvailableListener, null);
+        surfaceList.add(jpegImageReader.getSurface());
 
         handler.post(new Runnable() {
             @Override
@@ -532,28 +568,31 @@ public class CameraContext {
         }
 
         currentFlashMode = flashMode;
+        updateFlashMode(previewCaptureRequestBuilder, flashMode);
+        updatePreview(previewCaptureRequestBuilder);
+    }
+
+    private void updateFlashMode(CaptureRequest.Builder builder, String flashMode) {
         switch (flashMode) {
             case FLASH_MODE_OFF:
-                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-                previewCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+                builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                builder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
                 break;
             case FLASH_MODE_AUTO:
-                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
-                previewCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+                builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
+                builder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
                 break;
             case FLASH_MODE_ON:
-                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH);
-                previewCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+                builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH);
+                builder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
                 break;
             case FLASH_MODE_TORCH:
-                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-                previewCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
+                builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                builder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
                 break;
             default:
                 break;
         }
-
-        updatePreview(previewCaptureRequestBuilder);
     }
 
     public void onSingleTap(float x, float y) {
@@ -616,11 +655,48 @@ public class CameraContext {
        });
     }
 
-    public void capture() {
+    private PictureCallback pictureCallback;
+    public void capture(PictureCallback callback) {
+        pictureCallback = callback;
         Log.e(TAG, "capture: start");
         if (isAutoFocusCanDo) {
             status = STATUS_WAITING_FOR_SHOT;
             onTouchAF(0, 0);
+        } else {
+            doCapture();
         }
+    }
+
+    private void doCapture() {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    CaptureRequest.Builder captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+                    updateFlashMode(captureBuilder, currentFlashMode);
+                    captureBuilder.addTarget(jpegImageReader.getSurface());
+                    cameraCaptureSession.capture(captureBuilder.build(), new CameraCaptureSession.CaptureCallback() {
+                        @Override
+                        public void onCaptureCompleted(@NonNull CameraCaptureSession session,
+                                                       @NonNull CaptureRequest request,
+                                                       @NonNull TotalCaptureResult result) {
+                            super.onCaptureCompleted(session, request, result);
+                            Log.d(TAG, "onCaptureCompleted: doCapture");
+                        }
+
+                        @Override
+                        public void onCaptureFailed(@NonNull CameraCaptureSession session,
+                                                    @NonNull CaptureRequest request,
+                                                    @NonNull CaptureFailure failure) {
+                            super.onCaptureFailed(session, request, failure);
+                            Log.d(TAG, "onCaptureFailed: doCapture");
+                        }
+                    }, null);
+
+                } catch (CameraAccessException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 }
