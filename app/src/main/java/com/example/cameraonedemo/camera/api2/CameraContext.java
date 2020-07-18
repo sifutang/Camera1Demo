@@ -50,6 +50,7 @@ public class CameraContext {
 
     private static final int STATUS_IDLE = 0;
     private static final int STATUS_WAITING_FOR_SHOT = 1;
+    private static final int STATUS_WAITING_AE_PRE_CAPTURE_DONE = 2;
 
     private HandlerThread handlerThread;
     private Handler handler;
@@ -73,6 +74,7 @@ public class CameraContext {
     private boolean isAutoFocusCanDo = false;
     private boolean sendAePreCaptureRequest = false;
     private int status = STATUS_IDLE;
+    private int aePreCaptureRequestStatus = STATUS_IDLE;
 
     private CameraCaptureSession.CaptureCallback previewCallback = new CameraCaptureSession.CaptureCallback() {
 
@@ -109,6 +111,14 @@ public class CameraContext {
             Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
             Integer flashMode = result.get(CaptureResult.FLASH_MODE);
             Integer flashState = result.get(CaptureResult.FLASH_STATE);
+
+            afMode = afMode != null ? afMode : -1;
+            afState = afState != null ? afState : -1;
+            aeMode = aeMode != null ? aeMode : -1;
+            aeState = aeState != null ? aeState : -1;
+            flashMode = flashMode != null ? flashMode : -1;
+            flashState = flashState != null ? flashState : -1;
+
             if (!mAfMode.equals(afMode) || !mAfState.equals(afState) || !mAeMode.equals(aeMode)
                     || !mAeState.equals(aeState) || !mFlashMode.equals(flashMode) || !mFlashState.equals(flashState)) {
                 Log.i(TAG, "[onCaptureCompleted] afMode=" + afMode + ", afState=" + afState
@@ -124,29 +134,39 @@ public class CameraContext {
             mFlashState = flashState;
 
             if (status == STATUS_WAITING_FOR_SHOT) {
-                boolean isAfStateOk = afState != null &&
-                        (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
-                        || afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED);
+                boolean isAfStateOk = afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
+                        || afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED;
+                if (afState == -1) {
+                    Log.e(TAG, "onCaptureCompleted: afState is -1");
+                    isAfStateOk = true;
+                }
+
                 if (isAfStateOk) {
-                    boolean isAeStateOk = aeState != null &&
-                            (aeState == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
-                                    || aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED
-                                    || aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE);
-                    boolean isNeedPreCapture = (aeState != null
-                            && aeState == CaptureRequest.CONTROL_AE_STATE_FLASH_REQUIRED
+                    boolean isAeStateOk = aeState == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
+                            || aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED
+                            || aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE;
+                    if (aeState == -1) {
+                        Log.e(TAG, "onCaptureCompleted: aeState is -1");
+                        isAeStateOk = sendAePreCaptureRequest;
+                    }
+
+                    boolean isNeedPreCapture = (aeState == CaptureRequest.CONTROL_AE_STATE_FLASH_REQUIRED
                             && CameraContext.FLASH_MODE_AUTO.equals(currentFlashMode))
                             || CameraContext.FLASH_MODE_ON.equals(currentFlashMode);
                     Log.e(TAG, "onCaptureCompleted: af state ok, isAeStateOk = " + isAeStateOk
                             + ", isNeedPreCapture = " + isNeedPreCapture);
                     if (!sendAePreCaptureRequest && (!isAeStateOk || isNeedPreCapture)) {
                         sendAePreCaptureRequest();
-                    } else {
+                    } else if (aePreCaptureRequestStatus == STATUS_WAITING_AE_PRE_CAPTURE_DONE){
                         // do capture
                         // ...
                         Log.e(TAG, "onCaptureCompleted: send capture request, do capture");
                         status = STATUS_IDLE;
                         sendAePreCaptureRequest = false;
+                        aePreCaptureRequestStatus = STATUS_IDLE;
                         resetNormalPreview();
+                    } else {
+                        Log.d(TAG, "onCaptureCompleted: other status");
                     }
                 }
             }
@@ -203,6 +223,7 @@ public class CameraContext {
         }
 
         sendAePreCaptureRequest = true;
+        aePreCaptureRequestStatus = STATUS_WAITING_AE_PRE_CAPTURE_DONE;
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
         capture(previewCaptureRequestBuilder);

@@ -75,12 +75,6 @@ public class Camera1Activity extends AppCompatActivity
         recordBtn = findViewById(R.id.record_btn);
         recordBtn.setOnClickListener(this);
 
-        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {
-                    Manifest.permission.CAMERA,
-                    Manifest.permission.RECORD_AUDIO,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1000);
-        }
         cameraContext = new CameraContext(this);
     }
 
