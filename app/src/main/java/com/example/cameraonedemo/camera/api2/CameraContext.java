@@ -677,6 +677,17 @@ public class CameraContext extends BaseCameraContext {
                 try {
                     CaptureRequest.Builder captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
                     captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getCaptureOrientation());
+                    captureBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+                    captureBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
+                    captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+                    captureBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
+                    captureBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+                    Integer afMode = previewCaptureRequestBuilder.get(CaptureRequest.CONTROL_AF_MODE);
+                    Log.d(TAG, "doCapture af mode = " + afMode);
+                    if (afMode != null) {
+                        captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, afMode);
+                    }
+
                     updateFlashMode(captureBuilder, currentFlashMode);
                     captureBuilder.addTarget(jpegImageReader.getSurface());
                     cameraCaptureSession.capture(captureBuilder.build(), new CameraCaptureSession.CaptureCallback() {
