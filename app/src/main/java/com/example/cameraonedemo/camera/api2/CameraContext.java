@@ -33,6 +33,7 @@ import androidx.annotation.RequiresApi;
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.utils.CameraUtils;
 import com.example.cameraonedemo.utils.ImageReaderManager;
+import com.example.cameraonedemo.utils.PerformanceUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -89,8 +90,8 @@ public class CameraContext extends BaseCameraContext {
     private ImageReader.OnImageAvailableListener jpegImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
-            Log.d(TAG, "onImageAvailable: ");
             Image image = reader.acquireLatestImage();
+            Log.d(TAG, "onImageAvailable: image = " + image);
             if (image != null) {
                 ByteBuffer byteBuffer = image.getPlanes()[0].getBuffer();
                 byte[] jpeg = new byte[byteBuffer.capacity()];
@@ -101,6 +102,7 @@ public class CameraContext extends BaseCameraContext {
                 }
                 image.close();
             }
+            resetNormalPreview();
         }
     };
 
@@ -185,7 +187,7 @@ public class CameraContext extends BaseCameraContext {
                             + ", isNeedPreCapture = " + isNeedPreCapture);
                     if (!sendAePreCaptureRequest && (!isAeStateOk || isNeedPreCapture)) {
                         sendAePreCaptureRequest();
-                    } else if (aePreCaptureRequestStatus == STATUS_WAITING_AE_PRE_CAPTURE_DONE){
+                    } else if (aePreCaptureRequestStatus == STATUS_WAITING_AE_PRE_CAPTURE_DONE || isAeStateOk){
                         // do capture
                         // ...
                         Log.e(TAG, "onCaptureCompleted: send capture request, do capture");
@@ -193,7 +195,6 @@ public class CameraContext extends BaseCameraContext {
                         status = STATUS_IDLE;
                         sendAePreCaptureRequest = false;
                         aePreCaptureRequestStatus = STATUS_IDLE;
-                        resetNormalPreview();
                     } else {
                         Log.d(TAG, "onCaptureCompleted: other status");
                     }
@@ -323,10 +324,11 @@ public class CameraContext extends BaseCameraContext {
     private void openCamera() {
         if (curCameraId != -1) {
             try {
+                PerformanceUtil.getInstance().logTraceStart("openCamera");
                 cameraManager.openCamera(String.valueOf(curCameraId), new CameraDevice.StateCallback() {
                     @Override
                     public void onOpened(@NonNull CameraDevice camera) {
-                        Log.d(TAG, "onOpened: ");
+                        PerformanceUtil.getInstance().logTraceEnd("openCamera");
                         cameraDevice = camera;
                         createSession(camera);
                     }
@@ -357,6 +359,7 @@ public class CameraContext extends BaseCameraContext {
             @Override
             public void run() {
                 if (cameraDevice != null) {
+                    PerformanceUtil.getInstance().logTraceStart("closeCamera");
                     try {
                         if (cameraCaptureSession != null) {
                             cameraCaptureSession.abortCaptures();
@@ -368,7 +371,8 @@ public class CameraContext extends BaseCameraContext {
 
                     cameraDevice.close();
                     cameraDevice = null;
-                    Log.d(TAG, "closeCamera: ");
+                    ImageReaderManager.getInstance().release();
+                    PerformanceUtil.getInstance().logTraceEnd("closeCamera");
                 }
             }
         });
@@ -398,8 +402,6 @@ public class CameraContext extends BaseCameraContext {
             handlerThread = null;
             handler = null;
         }
-
-        ImageReaderManager.getInstance().release();
     }
 
     private void createSession(final CameraDevice device) {
@@ -413,7 +415,7 @@ public class CameraContext extends BaseCameraContext {
         jpegImageReader.setOnImageAvailableListener(jpegImageAvailableListener, null);
         surfaceList.add(jpegImageReader.getSurface());
 
-        Log.d(TAG, "createSession: start");
+        PerformanceUtil.getInstance().logTraceStart("createCaptureSession");
         handler.post(new Runnable() {
             @Override
             public void run() {
@@ -421,7 +423,7 @@ public class CameraContext extends BaseCameraContext {
                     device.createCaptureSession(surfaceList, new CameraCaptureSession.StateCallback() {
                         @Override
                         public void onConfigured(@NonNull CameraCaptureSession session) {
-                            Log.d(TAG, "onConfigured: createSession end");
+                            PerformanceUtil.getInstance().logTraceEnd("createCaptureSession");
                             cameraCaptureSession = session;
                             startPreview(session);
                         }
@@ -572,6 +574,7 @@ public class CameraContext extends BaseCameraContext {
         currentFlashMode = flashMode;
         updateFlashMode(previewCaptureRequestBuilder, flashMode);
         updatePreview(previewCaptureRequestBuilder);
+        Log.e(TAG, "switchFlashMode: " + flashMode);
     }
 
     private void updateFlashMode(CaptureRequest.Builder builder, String flashMode) {
@@ -619,7 +622,6 @@ public class CameraContext extends BaseCameraContext {
                         capture(previewCaptureRequestBuilder);
 
                         // trigger idle
-                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
 
@@ -660,7 +662,7 @@ public class CameraContext extends BaseCameraContext {
     public void capture(PictureCallback callback) {
         pictureCallback = callback;
         Log.e(TAG, "capture: start");
-        if (isAutoFocusCanDo) {
+        if (isAutoFocusCanDo && isNeedAePreCapture()) {
             status = STATUS_WAITING_FOR_SHOT;
             onTouchAF(0, 0);
         } else {
@@ -692,6 +694,7 @@ public class CameraContext extends BaseCameraContext {
                                                     @NonNull CaptureFailure failure) {
                             super.onCaptureFailed(session, request, failure);
                             Log.d(TAG, "onCaptureFailed: doCapture");
+                            resetNormalPreview();
                         }
                     }, null);
 
@@ -704,11 +707,16 @@ public class CameraContext extends BaseCameraContext {
 
     private int getCaptureOrientation() {
         int sensorOrientation = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-        int adjustOrientation = (sensorOrientation == 270 && displayOrientation % 180 != 0) ? 540 : 360;
-        int captureOrientation = (displayOrientation + sensorOrientation + adjustOrientation) % 360;
-        Log.d(TAG, "getCaptureOrientation: sensorOrientation = " + sensorOrientation
-                + ", displayOrientation = " + displayOrientation
-                + ", captureOrientation = " + captureOrientation);
+        int deviceOrientation = displayOrientation;
+        boolean facingFront = mCameraCharacteristics.get(CameraCharacteristics.LENS_FACING)
+                == CameraCharacteristics.LENS_FACING_FRONT;
+        if (facingFront) deviceOrientation = -deviceOrientation;
+        int captureOrientation = (sensorOrientation + deviceOrientation + 360) % 360;
+        Log.d(TAG, "getCaptureOrientation: captureOrientation = " + captureOrientation);
         return captureOrientation;
+    }
+
+    private boolean isNeedAePreCapture() {
+        return FLASH_MODE_AUTO.equals(currentFlashMode) || FLASH_MODE_ON.equals(currentFlashMode);
     }
 }

@@ -154,13 +154,16 @@ public class Camera2Activity extends AppCompatActivity
                         public void onPictureTaken(byte[] data) {
                             final Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
                             if (bitmap == null) {
+                                Log.e(TAG, "onPictureTaken: bitmap is null");
                                 return;
                             }
+
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
                                     pictureImageView.setImageBitmap(bitmap);
                                     pictureImageView.setVisibility(View.VISIBLE);
+                                    Log.d(TAG, "show picture");
                                 }
                             });
                         }
