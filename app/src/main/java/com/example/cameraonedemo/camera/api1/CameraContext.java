@@ -8,10 +8,10 @@ import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.os.Environment;
 import android.util.Log;
-import android.view.OrientationEventListener;
 import android.view.SurfaceHolder;
 import android.widget.Toast;
 
+import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.utils.CameraUtils;
 
 import java.io.File;
@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CameraContext {
+public class CameraContext extends BaseCameraContext {
 
     private static final String TAG = "CameraContext";
 
@@ -27,7 +27,6 @@ public class CameraContext {
     private Camera camera;
     private Camera.Parameters parameters;
     private CameraInfo currCameraInfo;
-    private MyOrientationEventListener orientationEventListener;
     private SurfaceHolder surfaceHolder;
 
     // for video
@@ -41,9 +40,6 @@ public class CameraContext {
     private int previewWidth = 1920;
     private int previewHeight = 1080;
 
-    public interface PreviewCallback {
-        void onPreviewFrame(byte[] data);
-    };
     private PreviewCallback callback;
 
     private Camera.AutoFocusMoveCallback cafCallback = new Camera.AutoFocusMoveCallback() {
@@ -63,8 +59,8 @@ public class CameraContext {
     };
 
     public CameraContext(Context context) {
+        super(context);
         this.context = context;
-        orientationEventListener = new MyOrientationEventListener(context);
     }
 
     public void configSurfaceHolder(SurfaceHolder holder) {
@@ -76,11 +72,11 @@ public class CameraContext {
     }
 
     public void resume() {
-        orientationEventListener.enable();
+        super.resume();
     }
 
     public void pause() {
-        orientationEventListener.disable();
+        super.pause();
     }
 
     public int getPreviewHeight() {
@@ -142,6 +138,7 @@ public class CameraContext {
 
     public void capture(final PictureCallback callback) {
         if (camera != null) {
+            rotation = getCaptureRotation(displayOrientation);
             parameters.setRotation(rotation);
             camera.setParameters(parameters);
             camera.takePicture(new Camera.ShutterCallback() {
@@ -174,6 +171,17 @@ public class CameraContext {
                 }
             });
         }
+    }
+
+    private int getCaptureRotation(int displayOrientation) {
+        int degrees;
+        if (currCameraInfo.getFacing() == CameraInfo.CAMERA_FACING_FRONT) {
+            degrees = (currCameraInfo.getPictureNeedRotateOrientation() - displayOrientation + 360) % 360;
+        } else { // back-facing camera
+            degrees = (currCameraInfo.getPictureNeedRotateOrientation() + displayOrientation) % 360;
+        }
+
+        return degrees;
     }
 
     public void switchCamera(int type) {
@@ -256,6 +264,7 @@ public class CameraContext {
 
         // config media recorder start
         camera.unlock();
+        rotation = getCaptureRotation(displayOrientation);
         mediaRecorder.setOrientationHint(rotation);
         mediaRecorder.setCamera(camera);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
@@ -316,33 +325,5 @@ public class CameraContext {
 
         camera.startPreview();
         enableCaf();
-    }
-
-    private class MyOrientationEventListener extends OrientationEventListener {
-
-        public MyOrientationEventListener(Context context) {
-            super(context);
-        }
-
-        @Override
-        public void onOrientationChanged(int orientation) {
-            if (orientation == ORIENTATION_UNKNOWN) return;
-            orientation = (orientation + 45) / 90 * 90;
-            int degrees;
-            if (currCameraInfo.getFacing() == CameraInfo.CAMERA_FACING_FRONT) {
-                degrees = (currCameraInfo.getPictureNeedRotateOrientation() - orientation + 360) % 360;
-            } else { // back-facing camera
-                degrees = (currCameraInfo.getPictureNeedRotateOrientation() + orientation) % 360;
-            }
-
-            if (rotation != degrees) {
-                rotation = degrees;
-                Log.d(TAG, "onOrientationChanged: rotation = " + rotation + ", orientation = " + orientation);
-            }
-        }
-    }
-
-    public interface PictureCallback {
-        void onPictureTaken(byte[] data);
     }
 }

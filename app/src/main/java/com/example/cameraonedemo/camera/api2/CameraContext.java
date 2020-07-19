@@ -30,6 +30,7 @@ import android.view.SurfaceHolder;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
+import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.utils.CameraUtils;
 import com.example.cameraonedemo.utils.ImageReaderManager;
 
@@ -41,7 +42,7 @@ import java.util.Arrays;
 import java.util.List;
 
 @RequiresApi(api = Build.VERSION_CODES.M)
-public class CameraContext {
+public class CameraContext extends BaseCameraContext {
 
     public static final String FLASH_MODE_OFF = "Flash Off";
     public static final String FLASH_MODE_AUTO = "Flash Auto";
@@ -68,6 +69,7 @@ public class CameraContext {
     private CaptureRequest.Builder previewCaptureRequestBuilder;
     private ImageReader jpegImageReader;
     private Size pictureSize = new Size(800, 600);
+    private CameraCharacteristics mCameraCharacteristics;
 
     // for video
     private MediaRecorder mediaRecorder;
@@ -82,10 +84,7 @@ public class CameraContext {
     private boolean sendAePreCaptureRequest = false;
     private int status = STATUS_IDLE;
     private int aePreCaptureRequestStatus = STATUS_IDLE;
-
-    public interface PictureCallback {
-        void onPictureTaken(byte[] data);
-    }
+    private PictureCallback pictureCallback;
 
     private ImageReader.OnImageAvailableListener jpegImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
@@ -261,6 +260,7 @@ public class CameraContext {
     }
 
     public CameraContext(Context context) {
+        super(context);
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
     }
 
@@ -342,8 +342,9 @@ public class CameraContext {
                     }
                 }, null);
 
-                isAutoFocusCanDo = CameraUtils.isSupportAutoFocus(
-                        cameraManager.getCameraCharacteristics(String.valueOf(curCameraId)));
+                mCameraCharacteristics =
+                        cameraManager.getCameraCharacteristics(String.valueOf(curCameraId));
+                isAutoFocusCanDo = CameraUtils.isSupportAutoFocus(mCameraCharacteristics);
             } catch (CameraAccessException e) {
                 e.printStackTrace();;
             }
@@ -412,6 +413,7 @@ public class CameraContext {
         jpegImageReader.setOnImageAvailableListener(jpegImageAvailableListener, null);
         surfaceList.add(jpegImageReader.getSurface());
 
+        Log.d(TAG, "createSession: start");
         handler.post(new Runnable() {
             @Override
             public void run() {
@@ -419,7 +421,7 @@ public class CameraContext {
                     device.createCaptureSession(surfaceList, new CameraCaptureSession.StateCallback() {
                         @Override
                         public void onConfigured(@NonNull CameraCaptureSession session) {
-                            Log.d(TAG, "onConfigured: ");
+                            Log.d(TAG, "onConfigured: createSession end");
                             cameraCaptureSession = session;
                             startPreview(session);
                         }
@@ -655,7 +657,6 @@ public class CameraContext {
        });
     }
 
-    private PictureCallback pictureCallback;
     public void capture(PictureCallback callback) {
         pictureCallback = callback;
         Log.e(TAG, "capture: start");
@@ -673,6 +674,7 @@ public class CameraContext {
             public void run() {
                 try {
                     CaptureRequest.Builder captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+                    captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getCaptureOrientation());
                     updateFlashMode(captureBuilder, currentFlashMode);
                     captureBuilder.addTarget(jpegImageReader.getSurface());
                     cameraCaptureSession.capture(captureBuilder.build(), new CameraCaptureSession.CaptureCallback() {
@@ -698,5 +700,15 @@ public class CameraContext {
                 }
             }
         });
+    }
+
+    private int getCaptureOrientation() {
+        int sensorOrientation = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+        int adjustOrientation = (sensorOrientation == 270 && displayOrientation % 180 != 0) ? 540 : 360;
+        int captureOrientation = (displayOrientation + sensorOrientation + adjustOrientation) % 360;
+        Log.d(TAG, "getCaptureOrientation: sensorOrientation = " + sensorOrientation
+                + ", displayOrientation = " + displayOrientation
+                + ", captureOrientation = " + captureOrientation);
+        return captureOrientation;
     }
 }

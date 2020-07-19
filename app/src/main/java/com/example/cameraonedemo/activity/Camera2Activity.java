@@ -66,11 +66,13 @@ public class Camera2Activity extends AppCompatActivity
     @Override
     protected void onResume() {
         super.onResume();
+        cameraContext.resume();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        cameraContext.pause();
     }
 
     @Override
