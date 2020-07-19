@@ -1,5 +1,6 @@
 package com.example.cameraonedemo.activity;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -8,6 +9,9 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
@@ -34,11 +38,14 @@ public class Camera2Activity extends AppCompatActivity
             CameraContext.FLASH_MODE_TORCH
     };
 
+    private static final int MSG_UPDATE_IMAGE_VIEW = 1000;
+
     private CameraContext cameraContext;
     private AutoFitSurfaceView surfaceView;
     private Button recordBtn;
     private Button flashOptionalBtn;
     private ImageView pictureImageView;
+    private MainHandler mainHandler = new MainHandler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -152,20 +159,8 @@ public class Camera2Activity extends AppCompatActivity
                     cameraContext.capture(new CameraContext.PictureCallback() {
                         @Override
                         public void onPictureTaken(byte[] data) {
-                            final Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-                            if (bitmap == null) {
-                                Log.e(TAG, "onPictureTaken: bitmap is null");
-                                return;
-                            }
-
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    pictureImageView.setImageBitmap(bitmap);
-                                    pictureImageView.setVisibility(View.VISIBLE);
-                                    Log.d(TAG, "show picture");
-                                }
-                            });
+                            Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                            mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_IMAGE_VIEW, bitmap));
                         }
                     });
                 }
@@ -178,6 +173,25 @@ public class Camera2Activity extends AppCompatActivity
             default:
                 Toast.makeText(this, "not impl", Toast.LENGTH_SHORT).show();
                 break;
+        }
+    }
+
+    private class MainHandler extends Handler {
+
+        MainHandler(Looper looper) {
+            super((looper));
+        }
+
+        @Override
+        public void dispatchMessage(@NonNull Message msg) {
+            super.dispatchMessage(msg);
+            switch (msg.what) {
+                case MSG_UPDATE_IMAGE_VIEW:
+                    pictureImageView.setVisibility(View.VISIBLE);
+                    pictureImageView.setImageBitmap((Bitmap) msg.obj);
+                    Log.d(TAG, "show picture");
+                    break;
+            }
         }
     }
 }
