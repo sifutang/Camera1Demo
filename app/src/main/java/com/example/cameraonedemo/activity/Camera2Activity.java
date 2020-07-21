@@ -2,7 +2,6 @@ package com.example.cameraonedemo.activity;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
-import androidx.appcompat.app.AppCompatActivity;
 
 import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
@@ -27,7 +26,7 @@ import com.example.cameraonedemo.utils.AutoFitSurfaceView;
 import java.util.Arrays;
 
 @RequiresApi(api = Build.VERSION_CODES.M)
-public class Camera2Activity extends AppCompatActivity
+public class Camera2Activity extends BaseActivity
         implements SurfaceHolder.Callback, View.OnClickListener {
 
     private static final String TAG = "Camera2Activity";
@@ -74,12 +73,27 @@ public class Camera2Activity extends AppCompatActivity
     protected void onResume() {
         super.onResume();
         cameraContext.resume();
+        setOnTouchEventListener(new OnTouchEventListener() {
+            @Override
+            public void onScale(float scaleFactor) {
+                Log.d(TAG, "onScale: " + scaleFactor);
+                if (cameraContext != null) {
+                    cameraContext.zoom(scaleFactor);
+                }
+            }
+
+            @Override
+            public void onSingleTapUp(float x, float y) {
+
+            }
+        });
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         cameraContext.pause();
+        setOnTouchEventListener(null);
     }
 
     @Override

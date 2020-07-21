@@ -124,16 +124,20 @@ public class CameraContext extends BaseCameraContext {
             e.printStackTrace();
         }
 
+        Log.d(TAG, "openCamera: " + currCameraInfo);
         camera.setPreviewCallback(new Camera.PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
+                Log.d(TAG, "onPreviewFrame: ");
                 if (callback != null) {
                     callback.onPreviewFrame(data);
                 }
             }
         });
+
+        long start = System.currentTimeMillis();
         camera.startPreview();
-        Log.d(TAG, "openCamera: " + currCameraInfo);
+        Log.d(TAG, "openCamera: start preview consume = " + (System.currentTimeMillis() - start));
     }
 
     public void capture(final PictureCallback callback) {

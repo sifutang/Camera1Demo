@@ -2,6 +2,7 @@ package com.example.cameraonedemo.camera.api2;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -89,6 +90,10 @@ public class CameraContext extends BaseCameraContext {
     private int aePreCaptureRequestCode;
     private PictureCallback pictureCallback;
 
+    // for zoom
+    private Rect cropRect = null;
+    private float curZoomRatio = 1f;
+
     private ImageReader.OnImageAvailableListener jpegImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
@@ -142,6 +147,8 @@ public class CameraContext extends BaseCameraContext {
                                        @NonNull CaptureRequest request,
                                        @NonNull TotalCaptureResult result) {
             super.onCaptureCompleted(session, request, result);
+            cropRect = result.get(CaptureResult.SCALER_CROP_REGION);
+
             Integer afMode = result.get(CaptureResult.CONTROL_AF_MODE);
             Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
             Integer aeMode = result.get(CaptureResult.CONTROL_AE_MODE);
@@ -414,6 +421,9 @@ public class CameraContext extends BaseCameraContext {
                     cameraDevice = null;
                     ImageReaderManager.getInstance().release();
                     PerformanceUtil.getInstance().logTraceEnd("closeCamera");
+
+                    curZoomRatio = 1f;
+                    cropRect = null;
                 }
             }
         });
@@ -779,5 +789,30 @@ public class CameraContext extends BaseCameraContext {
 
     private boolean isNeedAePreCapture() {
         return FLASH_MODE_AUTO.equals(currentFlashMode) || FLASH_MODE_ON.equals(currentFlashMode);
+    }
+
+    public void zoom(final float scaleFactor) {
+        if (cropRect != null) {
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    Rect sensorRect = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+                    Float maxZoomRatio = mCameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+                    if (sensorRect != null && maxZoomRatio != null) {
+                        curZoomRatio *= scaleFactor;
+                        curZoomRatio = Math.min(curZoomRatio, maxZoomRatio);
+                        curZoomRatio = Math.max(1f, curZoomRatio);
+                        int centerX = sensorRect.width() / 2;
+                        int centerY = sensorRect.height() / 2;
+                        int xDel = (int) (0.5f * sensorRect.width() / curZoomRatio);
+                        int yDel = (int) (0.5f * sensorRect.height() / curZoomRatio);
+                        Rect zoomRect = new Rect(centerX - xDel, centerY - yDel,
+                                centerX + xDel, centerY + yDel);
+                        previewCaptureRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoomRect);
+                        updatePreview(previewCaptureRequestBuilder);
+                    }
+                }
+            });
+        }
     }
 }
