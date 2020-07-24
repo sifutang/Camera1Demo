@@ -7,6 +7,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 
@@ -30,6 +31,10 @@ public class BaseActivity extends AppCompatActivity {
     private MyScaleGestureDetectorListener myScaleGestureDetectorListener
             = new MyScaleGestureDetectorListener();
 
+    private GestureDetector mGestureDetector;
+    private MyOnGestureListener mMyOnGestureListener
+            = new MyOnGestureListener();
+
     public void setOnTouchEventListener(OnTouchEventListener listener) {
         touchEventListener = listener;
     }
@@ -43,6 +48,7 @@ public class BaseActivity extends AppCompatActivity {
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
 
         scaleGestureDetector = new ScaleGestureDetector(this, myScaleGestureDetectorListener);
+        mGestureDetector = new GestureDetector(this, mMyOnGestureListener);
     }
 
     @Override
@@ -60,6 +66,7 @@ public class BaseActivity extends AppCompatActivity {
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         scaleGestureDetector.onTouchEvent(event);
+        mGestureDetector.onTouchEvent(event);
         return super.onTouchEvent(event);
     }
 
@@ -95,6 +102,42 @@ public class BaseActivity extends AppCompatActivity {
         @Override
         public void onScaleEnd(ScaleGestureDetector detector) {
 
+        }
+    }
+
+    private class MyOnGestureListener implements GestureDetector.OnGestureListener {
+
+        @Override
+        public boolean onDown(MotionEvent e) {
+            return true;
+        }
+
+        @Override
+        public void onShowPress(MotionEvent e) {
+
+        }
+
+        @Override
+        public boolean onSingleTapUp(MotionEvent e) {
+            if (e != null && touchEventListener != null) {
+                touchEventListener.onSingleTapUp(e.getX(), e.getY());
+            }
+            return true;
+        }
+
+        @Override
+        public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+            return false;
+        }
+
+        @Override
+        public void onLongPress(MotionEvent e) {
+
+        }
+
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            return false;
         }
     }
 }

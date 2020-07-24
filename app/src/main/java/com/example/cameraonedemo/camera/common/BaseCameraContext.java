@@ -34,6 +34,11 @@ public class BaseCameraContext {
         void onPreviewFrame(byte[] data);
     }
 
+    public interface FocusStatusCallback {
+        void onAutoFocus(boolean success);
+        void onAutoFocusMoving(boolean start);
+    }
+
     public BaseCameraContext(Context context) {
         orientationEventListener = new MyOrientationEventListener(context);
     }

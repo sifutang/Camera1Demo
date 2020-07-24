@@ -39,7 +39,7 @@ public class CameraUtils {
     }
 
     public static Rect calculateTapArea(int focusW, int focusH,
-                                        int x, int y,
+                                        float x, float y,
                                         int previewW, int previewH,
                                         int deviceDisplayOrientation,
                                         float focusAreaFactor,
@@ -47,22 +47,22 @@ public class CameraUtils {
         int left = constrain((int) (x - focusW * focusAreaFactor / 2), 0, previewW - focusW);
         int top = constrain((int) (y - focusH * focusAreaFactor / 2), 0, previewH - focusH);
         RectF rectF = new RectF(left, top, left + focusW, top + focusH);
-        Matrix matrixDriverToUi = new Matrix();
+        Matrix driverToUiMatrix = new Matrix();
         // need mirror for front camera
-        matrixDriverToUi.setScale(isMirror ? -1 : 1, 1);
+        driverToUiMatrix.setScale(isMirror ? -1 : 1, 1);
 
         // need rotate for device display orientation
-        matrixDriverToUi.postRotate(deviceDisplayOrientation);
+        driverToUiMatrix.postRotate(deviceDisplayOrientation);
 
         // camera driver coordinates range from left-top(-1000, -1000) to bottom-right(1000, 1000);
-        matrixDriverToUi.postScale(previewW / 2000f, previewH / 2000f);
+        driverToUiMatrix.postScale(previewW / 2000f, previewH / 2000f);
 
         // ui coordinates range from left-top(0, 0) to bottom-right(w, h)
-        matrixDriverToUi.postTranslate(previewW / 2f, previewH / 2f);
+        driverToUiMatrix.postTranslate(previewW / 2f, previewH / 2f);
 
-        Matrix matrixUiToDriver = new Matrix();
-        matrixDriverToUi.invert(matrixUiToDriver);
-        matrixUiToDriver.mapRect(rectF);
+        Matrix uiToDriverMatrix = new Matrix();
+        driverToUiMatrix.invert(uiToDriverMatrix);
+        uiToDriverMatrix.mapRect(rectF);
 
         Rect rect = new Rect();
         rect.set(

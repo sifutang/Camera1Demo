@@ -2,14 +2,12 @@ package com.example.cameraonedemo.activity;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
-import androidx.appcompat.app.AppCompatActivity;
 
-import android.Manifest;
 import android.annotation.SuppressLint;
-import android.content.pm.PackageManager;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
@@ -17,7 +15,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
-import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.View;
 import android.widget.Button;
@@ -26,13 +23,15 @@ import android.widget.ImageView;
 import com.example.cameraonedemo.camera.api1.CameraContext;
 import com.example.cameraonedemo.camera.api1.CameraInfo;
 import com.example.cameraonedemo.R;
+import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.encoder.VideoEncoder;
 import com.example.cameraonedemo.utils.AutoFitSurfaceView;
+import com.example.cameraonedemo.view.FocusMeteringView;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class Camera1Activity extends AppCompatActivity
+public class Camera1Activity extends BaseActivity
         implements SurfaceHolder.Callback, View.OnClickListener {
 
     private static final String TAG = "MainActivity";
@@ -41,17 +40,50 @@ public class Camera1Activity extends AppCompatActivity
     private static final int MSG_UPDATE_CODEC_STATUS = 1002;
     private static final int MSG_TOUCH_AF_LOCK_TIME_OUT = 5000;
 
-    private AutoFitSurfaceView surfaceView;
-    private ImageView pictureImageView;
-    private Button recordBtn;
-    private Button codecBtn;
-    private VideoEncoder videoEncoder;
+    private AutoFitSurfaceView mSurfaceView;
+    private ImageView mPictureImageView;
+    private Button mRecordBtn;
+    private Button mCodecBtn;
+    private FocusMeteringView mFocusMeteringView;
 
-    private CameraContext cameraContext;
-    private int currentCameraIdType = Camera.CameraInfo.CAMERA_FACING_BACK;
+    private VideoEncoder mVideoEncoder;
 
-    private ExecutorService executor = Executors.newSingleThreadExecutor();
-    private MainHandler mainHandler = new MainHandler(Looper.getMainLooper());
+    private CameraContext mCameraContext;
+    private int mPreviewWidth = 0;
+    private int mPreviewHeight = 0;
+    private int mCurrentCameraIdType = Camera.CameraInfo.CAMERA_FACING_BACK;
+    private ExecutorService mExecutor = Executors.newSingleThreadExecutor();
+    private MainHandler mMainHandler = new MainHandler(Looper.getMainLooper());
+
+    private OnTouchEventListener mOnTouchEventListener = new OnTouchEventListener() {
+        @Override
+        public void onScale(float scaleFactor) {
+
+        }
+
+        @Override
+        public void onSingleTapUp(final float x, final float y) {
+            int focusW = mFocusMeteringView.getWidth();
+            int focusH = mFocusMeteringView.getHeight();
+            Log.d(TAG, "onSingleTapUp: x = " + x + ", y = " + y
+                    + ", focusW = " + focusW + ", focusH = " + focusH);
+            mFocusMeteringView.show();
+            mFocusMeteringView.setCenter(x, y);
+            mFocusMeteringView.setColor(Color.WHITE);
+
+            mMainHandler.removeMessages(MSG_CANCEL_AUTO_FOCUS);
+            mMainHandler.sendEmptyMessageDelayed(MSG_CANCEL_AUTO_FOCUS, MSG_TOUCH_AF_LOCK_TIME_OUT);
+            final boolean isMirror = mCurrentCameraIdType == Camera.CameraInfo.CAMERA_FACING_FRONT;
+            mExecutor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    if (mCameraContext != null) {
+                        mCameraContext.onTouchAF(x, y, 200, 200, mPreviewWidth, mPreviewHeight, isMirror);
+                    }
+                }
+            });
+        }
+    };
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
@@ -59,63 +91,81 @@ public class Camera1Activity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
 
-        surfaceView = findViewById(R.id.surface_view);
-        surfaceView.getHolder().addCallback(this);
+        mSurfaceView = findViewById(R.id.surface_view);
+        mSurfaceView.getHolder().addCallback(this);
 
-        pictureImageView = findViewById(R.id.picture_image_view);
-        pictureImageView.setOnClickListener(this);
+        mPictureImageView = findViewById(R.id.picture_image_view);
+        mPictureImageView.setOnClickListener(this);
 
         findViewById(R.id.switch_btn).setOnClickListener(this);
         findViewById(R.id.capture_btn).setOnClickListener(this);
 
 
-        codecBtn = findViewById(R.id.codec_btn);
-        codecBtn.setOnClickListener(this);
+        mCodecBtn = findViewById(R.id.codec_btn);
+        mCodecBtn.setOnClickListener(this);
 
-        recordBtn = findViewById(R.id.record_btn);
-        recordBtn.setOnClickListener(this);
+        mRecordBtn = findViewById(R.id.record_btn);
+        mRecordBtn.setOnClickListener(this);
 
-        cameraContext = new CameraContext(this);
+        mFocusMeteringView = findViewById(R.id.focus_metering_view);
+
+        mCameraContext = new CameraContext(this);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        executor.submit(new Runnable() {
+        mExecutor.submit(new Runnable() {
             @Override
             public void run() {
-                cameraContext.resume();
+                mCameraContext.resume();
+                mCameraContext.setFocusStatusCallback(new BaseCameraContext.FocusStatusCallback() {
+                    @Override
+                    public void onAutoFocus(boolean success) {
+                        mFocusMeteringView.setColor(success ? Color.GREEN : Color.RED);
+                    }
+
+                    @Override
+                    public void onAutoFocusMoving(boolean start) {
+                        Log.d(TAG, "onAutoFocusMoving: " + start);
+//                        mFocusMeteringView.reset();
+//                        mFocusMeteringView.setColor(start ? Color.WHITE : Color.GREEN);
+                    }
+                });
             }
         });
+        setOnTouchEventListener(mOnTouchEventListener);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        executor.submit(new Runnable() {
+        mExecutor.submit(new Runnable() {
             @Override
             public void run() {
-                cameraContext.closeCamera();
-                cameraContext.pause();
+                mCameraContext.closeCamera();
+                mCameraContext.pause();
+                mCameraContext.setFocusStatusCallback(null);
             }
         });
-        mainHandler.removeCallbacksAndMessages(null);
+        mMainHandler.removeCallbacksAndMessages(null);
+        setOnTouchEventListener(null);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        executor.shutdown();
+        mExecutor.shutdown();
     }
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         final SurfaceHolder surfaceHolder = holder;
-        executor.submit(new Runnable() {
+        mExecutor.submit(new Runnable() {
             @Override
             public void run() {
-                cameraContext.configSurfaceHolder(surfaceHolder);
-                cameraContext.openCamera(currentCameraIdType);
+                mCameraContext.configSurfaceHolder(surfaceHolder);
+                mCameraContext.openCamera(mCurrentCameraIdType);
             }
         });
     }
@@ -123,31 +173,9 @@ public class Camera1Activity extends AppCompatActivity
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        final int previewW = width;
-        final int previewH = height;
-        Log.d(TAG, "surfaceChanged: format = " + format + ",w = " + width + ", h = " + height);
-
-        surfaceView.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                final int x = (int) event.getX();
-                final int y = (int) event.getY();
-                final boolean isMirror = currentCameraIdType == Camera.CameraInfo.CAMERA_FACING_FRONT;
-
-                mainHandler.removeMessages(MSG_CANCEL_AUTO_FOCUS);
-                executor.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (cameraContext != null) {
-                            cameraContext.onTouchAF(x, y, 200, 200, previewW, previewH, isMirror);
-                        }
-                    }
-                });
-                mainHandler.sendEmptyMessageDelayed(MSG_CANCEL_AUTO_FOCUS, MSG_TOUCH_AF_LOCK_TIME_OUT);
-
-                return false;
-            }
-        });
+        mPreviewWidth = width;
+        mPreviewHeight = height;
+        Log.d(TAG, "surfaceChanged: w = " + width + ", h = " + height);
     }
 
     @Override
@@ -158,94 +186,96 @@ public class Camera1Activity extends AppCompatActivity
     @Override
     public void onClick(View v) {
         if (v.getId() == R.id.switch_btn) {
-            if (currentCameraIdType == CameraInfo.CAMERA_FACING_BACK) {
-                currentCameraIdType = CameraInfo.CAMERA_FACING_FRONT;
+            if (mCurrentCameraIdType == CameraInfo.CAMERA_FACING_BACK) {
+                mCurrentCameraIdType = CameraInfo.CAMERA_FACING_FRONT;
             } else {
-                currentCameraIdType = CameraInfo.CAMERA_FACING_BACK;
+                mCurrentCameraIdType = CameraInfo.CAMERA_FACING_BACK;
             }
 
-            executor.submit(new Runnable() {
+            mFocusMeteringView.reset();
+            mFocusMeteringView.hide();
+            mExecutor.submit(new Runnable() {
                 @Override
                 public void run() {
-                    if (cameraContext != null) {
-                        cameraContext.switchCamera(currentCameraIdType);
+                    if (mCameraContext != null) {
+                        mCameraContext.switchCamera(mCurrentCameraIdType);
                     }
                 }
             });
         } else if (v.getId() == R.id.capture_btn) {
-            executor.submit(new Runnable() {
+            mExecutor.submit(new Runnable() {
                 @Override
                 public void run() {
-                    if (cameraContext != null) {
-                        cameraContext.capture(new CameraContext.PictureCallback() {
+                    if (mCameraContext != null) {
+                        mCameraContext.capture(new CameraContext.PictureCallback() {
                             @Override
                             public void onPictureTaken(byte[] data) {
                                 Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
                                 if (bitmap == null) {
                                     return;
                                 }
-                                pictureImageView.setImageBitmap(bitmap);
-                                pictureImageView.setVisibility(View.VISIBLE);
+                                mPictureImageView.setImageBitmap(bitmap);
+                                mPictureImageView.setVisibility(View.VISIBLE);
                             }
                         });
                     }
                 }
             });
         } else if (v.getId() == R.id.picture_image_view) {
-            pictureImageView.setVisibility(View.INVISIBLE);
+            mPictureImageView.setVisibility(View.INVISIBLE);
         } else if (v.getId() == R.id.record_btn) {
             Log.e(TAG, "onClick: record_btn");
-            executor.submit(new Runnable() {
+            mExecutor.submit(new Runnable() {
                 @Override
                 public void run() {
-                    if (cameraContext != null) {
-                        if (cameraContext.isRecording()) {
-                            cameraContext.stopRecord();
+                    if (mCameraContext != null) {
+                        if (mCameraContext.isRecording()) {
+                            mCameraContext.stopRecord();
                         } else {
-                            cameraContext.startRecord();
+                            mCameraContext.startRecord();
                         }
-                        final boolean isRecording = cameraContext.isRecording();
-                        mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_RECORDING_STATUS, isRecording));
+                        final boolean isRecording = mCameraContext.isRecording();
+                        mMainHandler.sendMessage(mMainHandler.obtainMessage(MSG_UPDATE_RECORDING_STATUS, isRecording));
                     }
                 }
             });
         } else if (v.getId() == R.id.codec_btn) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                if (videoEncoder == null) {
-                    videoEncoder = new VideoEncoder(cameraContext.getPreviewWidth(), cameraContext.getPreviewHeight());
+                if (mVideoEncoder == null) {
+                    mVideoEncoder = new VideoEncoder(mCameraContext.getPreviewWidth(), mCameraContext.getPreviewHeight());
                 }
 
-                if (!videoEncoder.isStart()) {
-                    cameraContext.setPreviewCallback(new CameraContext.PreviewCallback() {
+                if (!mVideoEncoder.isStart()) {
+                    mCameraContext.setPreviewCallback(new CameraContext.PreviewCallback() {
                         @Override
                         public void onPreviewFrame(byte[] data) {
-                            videoEncoder.addVideoData(data);
+                            mVideoEncoder.addVideoData(data);
                         }
                     });
-                    videoEncoder.setVideoEncodeListener(new VideoEncoder.VideoEncodeListener() {
+                    mVideoEncoder.setVideoEncodeListener(new VideoEncoder.VideoEncodeListener() {
                         @Override
                         public void onVideoEncodeStart() {
                             Log.d(TAG, "onVideoEncodeStart: ");
-                            mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_CODEC_STATUS, true));
+                            mMainHandler.sendMessage(mMainHandler.obtainMessage(MSG_UPDATE_CODEC_STATUS, true));
                         }
 
                         @Override
                         public void onVideoEncodeEnd() {
-                            mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_CODEC_STATUS, false));
-                            mainHandler.post(new Runnable() {
+                            mMainHandler.sendMessage(mMainHandler.obtainMessage(MSG_UPDATE_CODEC_STATUS, false));
+                            mMainHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
-                                    videoEncoder.release();
-                                    videoEncoder = null;
+                                    mVideoEncoder.release();
+                                    mVideoEncoder = null;
                                 }
                             });
                             Log.d(TAG, "onVideoEncodeEnd: ");
                         }
                     });
-                    videoEncoder.start();
+                    mVideoEncoder.start();
                 } else {
-                    cameraContext.setPreviewCallback(null);
-                    videoEncoder.stop();
+                    mCameraContext.setPreviewCallback(null);
+                    mVideoEncoder.stop();
                 }
             }
         }
@@ -262,20 +292,21 @@ public class Camera1Activity extends AppCompatActivity
             super.dispatchMessage(msg);
             switch (msg.what) {
                 case MSG_CANCEL_AUTO_FOCUS:
-                    if (cameraContext != null) {
-                        cameraContext.cancelAutoFocus();
-                        cameraContext.enableCaf();
+                    if (mCameraContext != null) {
+                        mCameraContext.cancelAutoFocus();
+                        mCameraContext.enableCaf();
+                        mFocusMeteringView.hide();
                     }
                     break;
                 case MSG_UPDATE_RECORDING_STATUS:
                     boolean isRecording = (Boolean) msg.obj;
                     Log.e(TAG, "dispatchMessage: MSG_UPDATE_RECORDING_STATUS isRecording = " + isRecording);
-                    recordBtn.setText(isRecording ? "结束" : "录像");
+                    mRecordBtn.setText(isRecording ? "结束" : "录像");
                     break;
                 case MSG_UPDATE_CODEC_STATUS:
                     boolean isCodec = (Boolean) msg.obj;
                     Log.e(TAG, "dispatchMessage: MSG_UPDATE_CODEC_STATUS isCodec = " + isCodec);
-                    codecBtn.setText(isCodec ? "结束" : "硬编");
+                    mCodecBtn.setText(isCodec ? "结束" : "硬编");
                     break;
             }
         }

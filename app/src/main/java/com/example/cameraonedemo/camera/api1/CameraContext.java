@@ -9,10 +9,10 @@ import android.media.MediaRecorder;
 import android.os.Environment;
 import android.util.Log;
 import android.view.SurfaceHolder;
-import android.widget.Toast;
 
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.utils.CameraUtils;
+import com.example.cameraonedemo.utils.PerformanceUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,20 +41,23 @@ public class CameraContext extends BaseCameraContext {
     private int previewHeight = 1080;
 
     private PreviewCallback callback;
+    private FocusStatusCallback mFocusStatusCallback;
 
     private Camera.AutoFocusMoveCallback cafCallback = new Camera.AutoFocusMoveCallback() {
         @Override
         public void onAutoFocusMoving(boolean start, Camera camera) {
-            Toast.makeText(context,
-                    "focus " + (start ? "start" : "end"), Toast.LENGTH_SHORT).show();
+            if (mFocusStatusCallback != null) {
+                mFocusStatusCallback.onAutoFocusMoving(start);
+            }
         }
     };
 
     private Camera.AutoFocusCallback afCallback = new Camera.AutoFocusCallback() {
         @Override
         public void onAutoFocus(boolean success, Camera camera) {
-            Toast.makeText(context,
-                    "focus " + (success ? "success" : "fail"), Toast.LENGTH_SHORT).show();
+            if (mFocusStatusCallback != null) {
+                mFocusStatusCallback.onAutoFocus(success);
+            }
         }
     };
 
@@ -69,6 +72,10 @@ public class CameraContext extends BaseCameraContext {
 
     public void setPreviewCallback(PreviewCallback callback) {
         this.callback = callback;
+    }
+
+    public void setFocusStatusCallback(FocusStatusCallback callback) {
+        mFocusStatusCallback = callback;
     }
 
     public void resume() {
@@ -125,19 +132,19 @@ public class CameraContext extends BaseCameraContext {
         }
 
         Log.d(TAG, "openCamera: " + currCameraInfo);
+        PerformanceUtil.getInstance().logTraceStart("startPreview");
         camera.setPreviewCallback(new Camera.PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
-                Log.d(TAG, "onPreviewFrame: ");
                 if (callback != null) {
                     callback.onPreviewFrame(data);
                 }
             }
         });
 
-        long start = System.currentTimeMillis();
         camera.startPreview();
-        Log.d(TAG, "openCamera: start preview consume = " + (System.currentTimeMillis() - start));
+        long consume = PerformanceUtil.getInstance().logTraceEnd("startPreview");
+        Log.d(TAG, "openCamera: start preview consume = " + consume);
     }
 
     public void capture(final PictureCallback callback) {
@@ -209,7 +216,7 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
-    public void onTouchAF(int x, int y,
+    public void onTouchAF(float x, float y,
                           int focusW, int focusH,
                           int previewW, int previewH,
                           boolean isMirror) {
