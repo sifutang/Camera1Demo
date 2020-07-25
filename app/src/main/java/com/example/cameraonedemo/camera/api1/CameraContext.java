@@ -40,6 +40,8 @@ public class CameraContext extends BaseCameraContext {
     private int previewWidth = 1920;
     private int previewHeight = 1080;
 
+    private String currentFlashMode = FLASH_MODE_OFF;
+
     private PreviewCallback callback;
     private FocusStatusCallback mFocusStatusCallback;
 
@@ -336,5 +338,52 @@ public class CameraContext extends BaseCameraContext {
 
         camera.startPreview();
         enableCaf();
+    }
+
+    public void switchFlashMode(String flashMode) {
+        if (flashMode == null || parameters == null) {
+            return;
+        }
+
+        currentFlashMode = flashMode;
+        updateFlashMode(parameters, flashMode);
+        updatePreview(parameters);
+    }
+
+    private void updateFlashMode(Camera.Parameters parameters, String flashMode) {
+        if (parameters != null && flashMode != null) {
+            List<String> supportFlashMode = parameters.getSupportedFlashModes();
+            Log.d(TAG, "updateFlashMode: supportFlashMode = " + supportFlashMode);
+            switch (flashMode) {
+                case FLASH_MODE_AUTO:
+                    if (supportFlashMode.contains(Camera.Parameters.FLASH_MODE_AUTO)) {
+                        parameters.setFlashMode(Camera.Parameters.FLASH_MODE_AUTO);
+                    }
+                    break;
+                case FLASH_MODE_OFF:
+                    if (supportFlashMode.contains(Camera.Parameters.FLASH_MODE_OFF)) {
+                        parameters.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
+                    }
+                    break;
+                case FLASH_MODE_ON:
+                    if (supportFlashMode.contains(Camera.Parameters.FLASH_MODE_ON)) {
+                        parameters.setFlashMode(Camera.Parameters.FLASH_MODE_ON);
+                    }
+                    break;
+                case FLASH_MODE_TORCH:
+                    if (supportFlashMode.contains(Camera.Parameters.FLASH_MODE_TORCH)) {
+                        parameters.setFlashMode(Camera.Parameters.FLASH_MODE_TORCH);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    private void updatePreview(Camera.Parameters parameters) {
+        if (camera != null) {
+            camera.setParameters(parameters);
+        }
     }
 }

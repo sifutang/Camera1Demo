@@ -14,9 +14,19 @@ import android.view.ScaleGestureDetector;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.cameraonedemo.camera.api2.CameraContext;
+
 public class BaseActivity extends AppCompatActivity {
 
     private static final String TAG = "BaseActivity";
+
+    protected static final String[] FLASH_OPTIONAL_SET = {
+            CameraContext.FLASH_MODE_OFF,
+            CameraContext.FLASH_MODE_AUTO,
+            CameraContext.FLASH_MODE_ON,
+            CameraContext.FLASH_MODE_TORCH
+    };
+
     private MySensorEventListener mySensorEventListener;
     private Sensor accelerometer;
     private SensorManager sensorManager;

@@ -30,12 +30,6 @@ public class Camera2Activity extends BaseActivity
         implements SurfaceHolder.Callback, View.OnClickListener {
 
     private static final String TAG = "Camera2Activity";
-    private static final String[] FLASH_OPTIONAL_SET = {
-            CameraContext.FLASH_MODE_OFF,
-            CameraContext.FLASH_MODE_AUTO,
-            CameraContext.FLASH_MODE_ON,
-            CameraContext.FLASH_MODE_TORCH
-    };
 
     private static final int MSG_UPDATE_IMAGE_VIEW = 1000;
 

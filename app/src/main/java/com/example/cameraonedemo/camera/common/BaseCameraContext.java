@@ -6,6 +6,12 @@ import android.view.OrientationEventListener;
 
 public class BaseCameraContext {
     private static final String TAG = "BaseCameraContext";
+
+    public static final String FLASH_MODE_OFF = "Flash Off";
+    public static final String FLASH_MODE_AUTO = "Flash Auto";
+    public static final String FLASH_MODE_ON = "Flash On";
+    public static final String FLASH_MODE_TORCH = "Flash Torch";
+
     protected int displayOrientation = 0;
     private MyOrientationEventListener orientationEventListener;
 

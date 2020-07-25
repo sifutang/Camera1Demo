@@ -28,6 +28,7 @@ import com.example.cameraonedemo.encoder.VideoEncoder;
 import com.example.cameraonedemo.utils.AutoFitSurfaceView;
 import com.example.cameraonedemo.view.FocusMeteringView;
 
+import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -44,6 +45,7 @@ public class Camera1Activity extends BaseActivity
     private ImageView mPictureImageView;
     private Button mRecordBtn;
     private Button mCodecBtn;
+    private Button flashOptionalBtn;
     private FocusMeteringView mFocusMeteringView;
 
     private VideoEncoder mVideoEncoder;
@@ -100,6 +102,8 @@ public class Camera1Activity extends BaseActivity
         findViewById(R.id.switch_btn).setOnClickListener(this);
         findViewById(R.id.capture_btn).setOnClickListener(this);
 
+        flashOptionalBtn = findViewById(R.id.flash_optional_btn);
+        flashOptionalBtn.setOnClickListener(this);
 
         mCodecBtn = findViewById(R.id.codec_btn);
         mCodecBtn.setOnClickListener(this);
@@ -277,6 +281,15 @@ public class Camera1Activity extends BaseActivity
                     mCameraContext.setPreviewCallback(null);
                     mVideoEncoder.stop();
                 }
+            }
+        } else if (v.getId() == R.id.flash_optional_btn) {
+            if (mCameraContext != null) {
+                String text = flashOptionalBtn.getText().toString();
+                int index = Arrays.asList(FLASH_OPTIONAL_SET).indexOf(text);
+                index = (index + 1) % FLASH_OPTIONAL_SET.length;
+                text = FLASH_OPTIONAL_SET[index];
+                flashOptionalBtn.setText(text);
+                mCameraContext.switchFlashMode(text);
             }
         }
     }

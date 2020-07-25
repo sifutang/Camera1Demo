@@ -46,11 +46,6 @@ import java.util.List;
 @RequiresApi(api = Build.VERSION_CODES.M)
 public class CameraContext extends BaseCameraContext {
 
-    public static final String FLASH_MODE_OFF = "Flash Off";
-    public static final String FLASH_MODE_AUTO = "Flash Auto";
-    public static final String FLASH_MODE_ON = "Flash On";
-    public static final String FLASH_MODE_TORCH = "Flash Torch";
-
     private static final String TAG = "CameraContext";
     private static final MeteringRectangle[] ZERO_WEIGHT_3A_REGION = new MeteringRectangle[]{
             new MeteringRectangle(0, 0, 0, 0, 0)
