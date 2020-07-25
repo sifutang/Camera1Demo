@@ -34,6 +34,7 @@ import androidx.annotation.RequiresApi;
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.utils.CameraUtils;
 import com.example.cameraonedemo.utils.ImageReaderManager;
+import com.example.cameraonedemo.utils.Logger;
 import com.example.cameraonedemo.utils.PerformanceUtil;
 
 import java.io.File;
@@ -501,8 +502,43 @@ public class CameraContext extends BaseCameraContext {
                     builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
                     builder.addTarget(surfaceHolder.getSurface());
                     builder.addTarget(codecSurface);
-                    session.setRepeatingRequest(builder.build(), previewCallback, null);
+                    CaptureRequest request = builder.build();
+                    session.setRepeatingRequest(request, previewCallback, null);
                     previewCaptureRequestBuilder = builder;
+
+                    if (Logger.DEBUG) {
+                        List<CaptureRequest.Key<?>> keys = request.getKeys();
+                        CaptureRequest.Key<?> meteringAvailableModeKey = null;
+                        CaptureRequest.Key<?> meteringExposureMeteringModeKey = null;
+                        for (CaptureRequest.Key<?> key: keys) {
+                            String name = key.getName();
+                            Log.d(TAG, "request key = " + name);
+                            if ("org.codeaurora.qcamera3.exposure_metering.available_modes".equals(name)) {
+                                meteringAvailableModeKey = key;
+                            } else if ("org.codeaurora.qcamera3.exposure_metering.exposure_metering_mode".equals(name)) {
+                                meteringExposureMeteringModeKey = key;
+                            }
+                        }
+
+                        if (meteringAvailableModeKey != null) {
+                            Log.e(TAG, "meteringAvailableMode = " + request.get(meteringAvailableModeKey));
+                            Log.e(TAG, "meteringExposureMeteringMode = " + request.get(meteringExposureMeteringModeKey));
+                        } else {
+                            Log.e(TAG, "meteringAvailableMode is null");
+                        }
+
+                        Log.e(TAG, "run: ----------------------------------------segment-----------------------------");
+                        List<CaptureRequest.Key<?>> requestKes = mCameraCharacteristics.getAvailableCaptureRequestKeys();
+                        for (CaptureRequest.Key<?> key: requestKes) {
+                            Log.d(TAG, "request key = " + key.getName());
+                        }
+
+                        Log.e(TAG, "run: ----------------------------------------segment-----------------------------");
+                        List<CaptureResult.Key<?>> resultKeys = mCameraCharacteristics.getAvailableCaptureResultKeys();
+                        for (CaptureResult.Key<?> key: resultKeys) {
+                            Log.d(TAG, "result key = " + key.getName());
+                        }
+                    }
                     switchFlashMode(FLASH_MODE_OFF);
                 } catch (CameraAccessException e) {
                     e.printStackTrace();
