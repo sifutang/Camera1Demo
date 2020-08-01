@@ -8,8 +8,8 @@
 
     <com.example.cameraonedemo.utils.AutoFitSurfaceView
         android:id="@+id/surface_view"
-        android:layout_width="720dp"
-        android:layout_height="1280dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
@@ -67,6 +67,15 @@
 
     <com.example.cameraonedemo.view.FocusMeteringView
         android:id="@+id/focus_metering_view"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <com.example.cameraonedemo.view.FaceView
+        android:id="@+id/face_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintBottom_toBottomOf="parent"

@@ -78,6 +78,24 @@ public class CameraUtils {
         return amount < low ? low : (amount > high ? high : amount);
     }
 
+    public static void prepareFaceMatrix(Matrix matrix,
+                                         boolean isMirror,
+                                         int displayOrientation,
+                                         int previewWidth,
+                                         int previewHeight) {
+        if (matrix == null) {
+            throw new NullPointerException("matrix is null");
+        }
+        // Need mirror for front camera
+        matrix.setScale(isMirror ? -1 : 1, 1);
+        // Need rotate for device display orientation
+        matrix.postRotate(displayOrientation);
+        // Camera driver coordinates range from left-top(-1000, -1000) to bottom-right(1000, 1000);
+        matrix.postScale(previewWidth / 2000f, previewHeight / 2000f);
+        // UI coordinates range from (0, 0) to (width, height).
+        matrix.postTranslate(previewWidth / 2f, previewHeight / 2f);
+    }
+
     /**
      * convert nv21 to nv12
      * nv21: YYYY YYYY vu vu

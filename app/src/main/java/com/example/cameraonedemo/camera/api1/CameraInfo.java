@@ -45,6 +45,10 @@ public class CameraInfo {
         return cameraInfo.facing;
     }
 
+    public boolean isFront() {
+        return cameraInfo.facing == CameraInfo.CAMERA_FACING_FRONT;
+    }
+
     public int getPictureNeedRotateOrientation() {
         return cameraInfo.orientation;
     }

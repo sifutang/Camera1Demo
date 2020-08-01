@@ -538,6 +538,8 @@ public class CameraContext extends BaseCameraContext {
                         for (CaptureResult.Key<?> key: resultKeys) {
                             Log.d(TAG, "result key = " + key.getName());
                         }
+
+                        testCall();
                     }
                     switchFlashMode(FLASH_MODE_OFF);
                 } catch (CameraAccessException e) {
@@ -844,6 +846,23 @@ public class CameraContext extends BaseCameraContext {
                     }
                 }
             });
+        }
+    }
+
+    private void testCall() {
+        if (CamcorderProfile.hasProfile(0, CamcorderProfile.QUALITY_HIGH_SPEED_720P)) {
+            CamcorderProfile profile = CamcorderProfile.get(
+                    0, CamcorderProfile.QUALITY_HIGH_SPEED_720P
+            );
+            Log.e(TAG, "hight speed 720p: audioCodec = " + profile.audioCodec
+                    + ", videoCodec = " + profile.videoCodec
+                    + ", videoBitRate = " + profile.videoBitRate
+                    + ", videoFrameRate = " + profile.videoFrameRate
+                    + ", w = " + profile.videoFrameWidth
+                    + ", h = " + profile.videoFrameHeight
+                    + ", outputFormat = " + profile.fileFormat);
+        } else {
+            Log.e(TAG, "testCall: ");
         }
     }
 }

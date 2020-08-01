@@ -2,7 +2,9 @@ package com.example.cameraonedemo.camera.api1;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.Matrix;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
@@ -35,6 +37,7 @@ public class CameraContext extends BaseCameraContext {
     private File videoFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/test.mp4");
 
 
+    private boolean isFaceDetectStarted = false;
     private int displayOrientation;
     private int rotation;
     private int previewWidth = 1920;
@@ -44,6 +47,7 @@ public class CameraContext extends BaseCameraContext {
 
     private PreviewCallback callback;
     private FocusStatusCallback mFocusStatusCallback;
+    private FaceDetectionListener mFaceDetectionListener;
 
     private Camera.AutoFocusMoveCallback cafCallback = new Camera.AutoFocusMoveCallback() {
         @Override
@@ -80,6 +84,10 @@ public class CameraContext extends BaseCameraContext {
         mFocusStatusCallback = callback;
     }
 
+    public void setFaceDetectionListener(FaceDetectionListener listener) {
+        mFaceDetectionListener = listener;
+    }
+
     public void resume() {
         super.resume();
     }
@@ -98,7 +106,7 @@ public class CameraContext extends BaseCameraContext {
 
     public void openCamera(int type) {
         currCameraInfo = new CameraInfo(type);
-        int cameraId = currCameraInfo.getCameraId();
+        final int cameraId = currCameraInfo.getCameraId();
         camera = Camera.open(cameraId);
         parameters = camera.getParameters();
         List<Camera.Size> previewSizeList = parameters.getSupportedPreviewSizes();
@@ -147,6 +155,34 @@ public class CameraContext extends BaseCameraContext {
         camera.startPreview();
         long consume = PerformanceUtil.getInstance().logTraceEnd("startPreview");
         Log.d(TAG, "openCamera: start preview consume = " + consume);
+
+        boolean isSupportFaceDetected = parameters.getMaxNumDetectedFaces() > 0;
+        if (isSupportFaceDetected) {
+            isFaceDetectStarted = true;
+            camera.setFaceDetectionListener(new Camera.FaceDetectionListener() {
+                @Override
+                public void onFaceDetection(Camera.Face[] faces, Camera camera) {
+                    if (faces == null || faces.length == 0) {
+                        Log.i(TAG, "onFaceDetection: no face ");
+                        if (mFaceDetectionListener != null) {
+                            mFaceDetectionListener.onFaceDetection(null);
+                        }
+                        return;
+                    }
+
+                    if (mFaceDetectionListener != null) {
+                        Rect[] rectArr = new Rect[faces.length];
+                        for (int i = 0; i < faces.length; i++) {
+                            Rect rect = faces[i].rect;
+                            Log.d(TAG, "onFaceDetection: " + rect);
+                            rectArr[i] = rect;
+                        }
+                        mFaceDetectionListener.onFaceDetection(rectArr);
+                    }
+                }
+            });
+            camera.startFaceDetection();
+        }
     }
 
     public void capture(final PictureCallback callback) {
@@ -257,6 +293,10 @@ public class CameraContext extends BaseCameraContext {
 
     public void closeCamera() {
         if (camera != null) {
+            if (isFaceDetectStarted) {
+                camera.setFaceDetectionListener(null);
+                camera.stopFaceDetection();
+            }
             camera.setPreviewCallback(null);
             camera.stopPreview();
             camera.release();
@@ -266,6 +306,14 @@ public class CameraContext extends BaseCameraContext {
 
     public boolean isRecording() {
         return isRecording;
+    }
+
+    public boolean isFront() {
+        return currCameraInfo.isFront();
+    }
+
+    public int getDisplayOrientation() {
+        return displayOrientation;
     }
 
     public void startRecord() {

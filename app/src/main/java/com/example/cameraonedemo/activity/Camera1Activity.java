@@ -8,6 +8,7 @@ import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
@@ -26,6 +27,7 @@ import com.example.cameraonedemo.R;
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.encoder.VideoEncoder;
 import com.example.cameraonedemo.utils.AutoFitSurfaceView;
+import com.example.cameraonedemo.view.FaceView;
 import com.example.cameraonedemo.view.FocusMeteringView;
 
 import java.util.Arrays;
@@ -47,7 +49,7 @@ public class Camera1Activity extends BaseActivity
     private Button mCodecBtn;
     private Button flashOptionalBtn;
     private FocusMeteringView mFocusMeteringView;
-
+    private FaceView mFaceView;
     private VideoEncoder mVideoEncoder;
 
     private CameraContext mCameraContext;
@@ -112,6 +114,7 @@ public class Camera1Activity extends BaseActivity
         mRecordBtn.setOnClickListener(this);
 
         mFocusMeteringView = findViewById(R.id.focus_metering_view);
+        mFaceView = findViewById(R.id.face_view);
 
         mCameraContext = new CameraContext(this);
     }
@@ -138,6 +141,12 @@ public class Camera1Activity extends BaseActivity
                 });
             }
         });
+        mCameraContext.setFaceDetectionListener(new BaseCameraContext.FaceDetectionListener() {
+            @Override
+            public void onFaceDetection(Rect[] faces) {
+                mFaceView.setFaces(faces, mCameraContext.isFront(), mCameraContext.getDisplayOrientation());
+            }
+        });
         setOnTouchEventListener(mOnTouchEventListener);
     }
 
@@ -153,6 +162,7 @@ public class Camera1Activity extends BaseActivity
             }
         });
         mMainHandler.removeCallbacksAndMessages(null);
+        mCameraContext.setFaceDetectionListener(null);
         setOnTouchEventListener(null);
     }
 
@@ -206,6 +216,7 @@ public class Camera1Activity extends BaseActivity
                     }
                 }
             });
+            mFaceView.clear();
         } else if (v.getId() == R.id.capture_btn) {
             mExecutor.submit(new Runnable() {
                 @Override

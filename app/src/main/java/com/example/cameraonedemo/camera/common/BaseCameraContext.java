@@ -1,6 +1,7 @@
 package com.example.cameraonedemo.camera.common;
 
 import android.content.Context;
+import android.graphics.Rect;
 import android.util.Log;
 import android.view.OrientationEventListener;
 
@@ -43,6 +44,10 @@ public class BaseCameraContext {
     public interface FocusStatusCallback {
         void onAutoFocus(boolean success);
         void onAutoFocusMoving(boolean start);
+    }
+
+    public interface FaceDetectionListener {
+        void onFaceDetection(Rect[] faces);
     }
 
     public BaseCameraContext(Context context) {
