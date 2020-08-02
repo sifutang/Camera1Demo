@@ -8,7 +8,6 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.View;
 
 import androidx.annotation.Nullable;
@@ -16,8 +15,6 @@ import androidx.annotation.Nullable;
 import com.example.cameraonedemo.utils.CameraUtils;
 
 public class FaceView extends View {
-
-    private static final String TAG = "FaceView";
 
     private Paint mPaint;
     private int mColor = Color.WHITE;
@@ -72,7 +69,6 @@ public class FaceView extends View {
         super.onDraw(canvas);
         if (faceRectArr != null) {
             for (Rect rect: faceRectArr) {
-                Log.d(TAG, "onDraw: w = " + getWidth() + ", h = " + getHeight());
                 CameraUtils.prepareFaceMatrix(mFaceMatrix,
                         isMirror, displayOrientation, getWidth(), getHeight());
                 mFaceRectF.set(rect);

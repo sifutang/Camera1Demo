@@ -155,8 +155,9 @@ public class CameraContext extends BaseCameraContext {
         camera.startPreview();
         long consume = PerformanceUtil.getInstance().logTraceEnd("startPreview");
         Log.d(TAG, "openCamera: start preview consume = " + consume);
-
-        boolean isSupportFaceDetected = parameters.getMaxNumDetectedFaces() > 0;
+        int maxNumDetectedFaces = parameters.getMaxNumDetectedFaces();
+        Log.d(TAG, "openCamera: maxNumDetectedFaces = " + maxNumDetectedFaces);
+        boolean isSupportFaceDetected = maxNumDetectedFaces > 0;
         if (isSupportFaceDetected) {
             isFaceDetectStarted = true;
             camera.setFaceDetectionListener(new Camera.FaceDetectionListener() {

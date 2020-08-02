@@ -81,8 +81,8 @@ public class CameraUtils {
     public static void prepareFaceMatrix(Matrix matrix,
                                          boolean isMirror,
                                          int displayOrientation,
-                                         int previewWidth,
-                                         int previewHeight) {
+                                         int viewWidth,
+                                         int viewHeight) {
         if (matrix == null) {
             throw new NullPointerException("matrix is null");
         }
@@ -91,9 +91,39 @@ public class CameraUtils {
         // Need rotate for device display orientation
         matrix.postRotate(displayOrientation);
         // Camera driver coordinates range from left-top(-1000, -1000) to bottom-right(1000, 1000);
-        matrix.postScale(previewWidth / 2000f, previewHeight / 2000f);
+        matrix.postScale(viewWidth / 2000f, viewHeight / 2000f);
         // UI coordinates range from (0, 0) to (width, height).
-        matrix.postTranslate(previewWidth / 2f, previewHeight / 2f);
+        matrix.postTranslate(viewWidth / 2f, viewHeight / 2f);
+    }
+
+    public static Rect convertToUiFaceRect(Rect sensorFaceRect,
+                                         boolean isMirror,
+                                         int displayOrientation,
+                                         int viewWidth,
+                                         int viewHeight) {
+        Matrix matrix = new Matrix();
+        // Need mirror for front camera
+        matrix.setScale(isMirror ? -1 : 1, 1);
+        // Need rotate for device display orientation
+        matrix.postRotate(displayOrientation);
+        // Camera driver coordinates range from left-top(-1000, -1000) to bottom-right(1000, 1000);
+        matrix.postScale(viewWidth / 2000f, viewHeight / 2000f);
+        // UI coordinates range from (0, 0) to (width, height).
+        matrix.postTranslate(viewWidth / 2f, viewHeight / 2f);
+
+        // rect apply matrix transform
+        RectF rectF = new RectF(sensorFaceRect);
+        matrix.mapRect(rectF);
+
+        Rect rect = new Rect();
+        rect.set(
+                Math.round(rectF.left),
+                Math.round(rectF.top),
+                Math.round(rectF.right),
+                Math.round(rectF.bottom)
+        );
+
+        return rect;
     }
 
     /**
