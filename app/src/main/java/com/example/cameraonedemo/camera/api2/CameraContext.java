@@ -53,8 +53,9 @@ public class CameraContext extends BaseCameraContext {
     };
 
     private static final int STATUS_IDLE = 0;
-    private static final int STATUS_WAITING_FOR_SHOT = 1;
-    private static final int STATUS_WAITING_AE_PRE_CAPTURE_TRIGGER = 2;
+
+    private static final int STATUS_WAITING_AE_PRE_CAPTURE_FOR_SHOT = 1;
+    private static final int STATUS_WAITING_TORCH_CONVERGED_FOR_SHOT = 2;
     private static final int STATUS_WAITING_AE_PRE_CAPTURE_DONE = 3;
 
     private HandlerThread handlerThread;
@@ -81,10 +82,10 @@ public class CameraContext extends BaseCameraContext {
 
     private boolean isAfStateOk = false;
     private boolean isAutoFocusCanDo = false;
-    private boolean sendAePreCaptureRequest = false;
     private int status = STATUS_IDLE;
     private int aePreCaptureRequestStatus = STATUS_IDLE;
-    private int aePreCaptureRequestCode;
+    private int requestCode = -1;
+
     private PictureCallback pictureCallback;
 
     // for zoom
@@ -120,6 +121,7 @@ public class CameraContext extends BaseCameraContext {
         private Integer mFlashState = -1;
         private Integer mAwbMode = -1;
         private Integer mAwbState = -1;
+        private boolean isShotCanDo = false;
 
         @Override
         public void onCaptureStarted(@NonNull CameraCaptureSession session,
@@ -192,7 +194,21 @@ public class CameraContext extends BaseCameraContext {
                 Log.d(TAG, "onCaptureCompleted: af state ok");
             }
 
-            if (status == STATUS_WAITING_FOR_SHOT) {
+            if (status == STATUS_WAITING_TORCH_CONVERGED_FOR_SHOT
+                    || status == STATUS_WAITING_AE_PRE_CAPTURE_FOR_SHOT) {
+                if (requestCode == request.hashCode()) {
+                    isShotCanDo = true;
+                } else {
+                    Log.e(TAG, "onCaptureCompleted: discard previous callback");
+                }
+            }
+
+            if (!isShotCanDo) {
+                return;
+            }
+
+            // try take picture
+            if (status == STATUS_WAITING_AE_PRE_CAPTURE_FOR_SHOT) {
                 if (aePreCaptureRequestStatus != STATUS_WAITING_AE_PRE_CAPTURE_DONE
                         && aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE) {
                     Log.e(TAG, "onCaptureCompleted: ae pre capture executing");
@@ -209,7 +225,8 @@ public class CameraContext extends BaseCameraContext {
 
                     Log.w(TAG, "onCaptureCompleted: isAeStateOk = " + isAeStateOk);
 
-                    if (aePreCaptureRequestStatus == STATUS_WAITING_AE_PRE_CAPTURE_DONE && isAeStateOk){
+                    if ((aePreCaptureRequestStatus == STATUS_WAITING_AE_PRE_CAPTURE_DONE)
+                            && isAeStateOk){
                         // do capture
                         // ...
                         Log.e(TAG, "onCaptureCompleted: send capture request, do capture");
@@ -217,9 +234,24 @@ public class CameraContext extends BaseCameraContext {
                         Log.e(TAG, "run: send-capture-command consume = " + consume);
                         doCapture();
                         status = STATUS_IDLE;
-                        sendAePreCaptureRequest = false;
                         aePreCaptureRequestStatus = STATUS_IDLE;
-                        aePreCaptureRequestCode = 0;
+                        isShotCanDo = false;
+                    }
+                }
+            } else if (status == STATUS_WAITING_TORCH_CONVERGED_FOR_SHOT) {
+                if (isAfStateOk) {
+                    boolean isAeStateOk = aeState == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
+                            || aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED;
+                    if (aeState == -1) {
+                        Log.e(TAG, "onCaptureCompleted: aeState is -1");
+                        isAeStateOk = true;
+                    }
+
+                    if (isAeStateOk && requestCode == request.hashCode()) {
+                        Log.d(TAG, "onCaptureCompleted: af and ae state ok, do capture");
+                        doCapture();
+                        status = STATUS_IDLE;
+                        isShotCanDo = false;
                     }
                 }
             }
@@ -230,17 +262,13 @@ public class CameraContext extends BaseCameraContext {
                                     @NonNull CaptureRequest request,
                                     @NonNull CaptureFailure failure) {
             super.onCaptureFailed(session, request, failure);
-            if (aePreCaptureRequestCode == request.hashCode()) {
-                Log.e(TAG, "onCaptureFailed: ae pre capture done");
-                aePreCaptureRequestStatus = STATUS_WAITING_AE_PRE_CAPTURE_DONE;
+            if (status == STATUS_WAITING_TORCH_CONVERGED_FOR_SHOT
+                    || status == STATUS_WAITING_AE_PRE_CAPTURE_FOR_SHOT) {
+                if (requestCode == request.hashCode()) {
+                    isShotCanDo = true;
+                    Log.d(TAG, "onCaptureFailed: ");
+                }
             }
-        }
-
-        @Override
-        public void onCaptureSequenceCompleted(@NonNull CameraCaptureSession session,
-                                               int sequenceId,
-                                               long frameNumber) {
-            super.onCaptureSequenceCompleted(session, sequenceId, frameNumber);
         }
 
         @Override
@@ -255,9 +283,12 @@ public class CameraContext extends BaseCameraContext {
                                         @NonNull Surface target,
                                         long frameNumber) {
             super.onCaptureBufferLost(session, request, target, frameNumber);
-            if (aePreCaptureRequestCode == request.hashCode()) {
-                Log.e(TAG, "onCaptureBufferLost: ae pre capture done");
-                aePreCaptureRequestStatus = STATUS_WAITING_AE_PRE_CAPTURE_DONE;
+            if (status == STATUS_WAITING_TORCH_CONVERGED_FOR_SHOT
+                    || status == STATUS_WAITING_AE_PRE_CAPTURE_FOR_SHOT) {
+                if (requestCode == request.hashCode()) {
+                    isShotCanDo = true;
+                    Log.d(TAG, "onCaptureBufferLost: ");
+                }
             }
         }
     };
@@ -275,24 +306,12 @@ public class CameraContext extends BaseCameraContext {
 
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
 
-        // effect preview
-        updatePreview(previewCaptureRequestBuilder);
-    }
-
-    private void sendAePreCaptureRequest() {
-        if (sendAePreCaptureRequest) {
-            Log.w(TAG, "sendAePreCaptureRequest: processing, filter it...");
-            return;
+        if (mIsUseTorchModeWhenFlashOnOptional) {
+            switchFlashMode(FLASH_MODE_ON);
         }
 
-        sendAePreCaptureRequest = true;
-        aePreCaptureRequestStatus = STATUS_WAITING_AE_PRE_CAPTURE_TRIGGER;
-        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
-        CaptureRequest request = previewCaptureRequestBuilder.build();
-        aePreCaptureRequestCode = request.hashCode();
-        capture(request);
-        Log.e(TAG, "sendAePreCaptureRequest: ");
+        // effect preview
+        updatePreview(previewCaptureRequestBuilder);
     }
 
     private void sendAeAfTriggerCaptureRequest() {
@@ -303,8 +322,8 @@ public class CameraContext extends BaseCameraContext {
         // ae trigger start
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
         CaptureRequest request = previewCaptureRequestBuilder.build();
-        aePreCaptureRequestCode = request.hashCode();
-        capture(request);
+        requestCode = request.hashCode();
+        updatePreview(request);
 
         // trigger idle
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
@@ -759,21 +778,40 @@ public class CameraContext extends BaseCameraContext {
        handler.post(new Runnable() {
            @Override
            public void run() {
-               try {
-                   cameraCaptureSession.setRepeatingRequest(builder.build(), previewCallback, null);
-               } catch (CameraAccessException e) {
-                   e.printStackTrace();
-               }
+               updatePreview(builder.build());
            }
        });
     }
 
+    private void updatePreview(CaptureRequest request) {
+        try {
+            cameraCaptureSession.setRepeatingRequest(request, previewCallback, null);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private boolean mIsUseTorchModeWhenFlashOnOptional = true;
     public void capture(PictureCallback callback) {
         pictureCallback = callback;
         PerformanceUtil.getInstance().logTraceStart("send-capture-command");
         Log.e(TAG, "capture: start isAfStateOk = " + isAfStateOk);
+        if (mIsUseTorchModeWhenFlashOnOptional) {
+            status = STATUS_WAITING_TORCH_CONVERGED_FOR_SHOT;
+            // torch
+            previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+            previewCaptureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
+            // af trigger
+            previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
+            previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+            CaptureRequest request = previewCaptureRequestBuilder.build();
+            requestCode = request.hashCode();
+            updatePreview(request);
+            return;
+        }
+
         if (isAutoFocusCanDo && isNeedAePreCapture()) {
-            status = STATUS_WAITING_FOR_SHOT;
+            status = STATUS_WAITING_AE_PRE_CAPTURE_FOR_SHOT;
             sendAeAfTriggerCaptureRequest();
         } else {
             doCapture();
@@ -793,15 +831,16 @@ public class CameraContext extends BaseCameraContext {
                     captureBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
                     captureBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
                     captureBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
-
-//                    captureBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
                     Integer afMode = previewCaptureRequestBuilder.get(CaptureRequest.CONTROL_AF_MODE);
-                    Log.d(TAG, "doCapture af mode = " + afMode);
                     if (afMode != null) {
                         captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, afMode);
                     }
 
-                    updateFlashMode(captureBuilder, currentFlashMode);
+                    if (mIsUseTorchModeWhenFlashOnOptional) {
+                        updateFlashMode(captureBuilder, FLASH_MODE_TORCH);
+                    } else {
+                        updateFlashMode(captureBuilder, currentFlashMode);
+                    }
                     captureBuilder.addTarget(jpegImageReader.getSurface());
                     cameraCaptureSession.capture(captureBuilder.build(), new CameraCaptureSession.CaptureCallback() {
                         @Override
