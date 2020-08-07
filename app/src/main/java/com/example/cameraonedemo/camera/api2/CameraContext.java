@@ -67,7 +67,7 @@ public class CameraContext extends BaseCameraContext {
     private Surface codecSurface;
     private CaptureRequest.Builder previewCaptureRequestBuilder;
     private ImageReader jpegImageReader;
-    private Size pictureSize = new Size(800, 600);
+    private Size pictureSize = new Size(1440, 720);
     private CameraCharacteristics mCameraCharacteristics;
 
     // for video
@@ -79,6 +79,7 @@ public class CameraContext extends BaseCameraContext {
     private String[] ids;
     private String currentFlashMode = CameraContext.FLASH_MODE_OFF;
 
+    private boolean isAfStateOk = false;
     private boolean isAutoFocusCanDo = false;
     private boolean sendAePreCaptureRequest = false;
     private int status = STATUS_IDLE;
@@ -182,17 +183,18 @@ public class CameraContext extends BaseCameraContext {
             mAwbMode = awbMode;
             mAwbState = awbState;
 
+            isAfStateOk = afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
+                    || afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED
+                    || afState == CaptureRequest.CONTROL_AF_STATE_PASSIVE_FOCUSED;
+            if (afState == -1) {
+                Log.e(TAG, "onCaptureCompleted: afState is -1");
+                isAfStateOk = true;
+            }
+
             if (status == STATUS_WAITING_FOR_SHOT) {
                 if (aePreCaptureRequestCode == request.hashCode()) {
                     Log.d(TAG, "onCaptureCompleted: ae pre capture done");
                     aePreCaptureRequestStatus = STATUS_WAITING_AE_PRE_CAPTURE_DONE;
-                }
-
-                boolean isAfStateOk = afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
-                        || afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED;
-                if (afState == -1) {
-                    Log.e(TAG, "onCaptureCompleted: afState is -1");
-                    isAfStateOk = true;
                 }
 
                 if (isAfStateOk) {
@@ -284,6 +286,8 @@ public class CameraContext extends BaseCameraContext {
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
 
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
+
         // effect preview
         updatePreview(previewCaptureRequestBuilder);
     }
@@ -302,6 +306,24 @@ public class CameraContext extends BaseCameraContext {
         aePreCaptureRequestCode = request.hashCode();
         capture(request);
         Log.e(TAG, "sendAePreCaptureRequest: ");
+    }
+
+    private void sendAfTriggerCaptureRequest() {
+        // trigger start
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+        capture(previewCaptureRequestBuilder);
+
+        // trigger idle
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
+
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+
+        // effect preview
+        updatePreview(previewCaptureRequestBuilder);
     }
 
     public CameraContext(Context context) {
@@ -667,6 +689,7 @@ public class CameraContext extends BaseCameraContext {
     }
 
     private void updateFlashMode(CaptureRequest.Builder builder, String flashMode) {
+        Log.d(TAG, "updateFlashMode: " + flashMode);
         switch (flashMode) {
             case FLASH_MODE_OFF:
                 builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
@@ -704,7 +727,6 @@ public class CameraContext extends BaseCameraContext {
                     if (previewCaptureRequestBuilder != null) {
                         // maybe trigger cancel if previous trigger not done.
                         // ..
-
                         // trigger start
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
@@ -714,7 +736,6 @@ public class CameraContext extends BaseCameraContext {
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
 
-//                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON); // look flash mode
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
@@ -754,10 +775,13 @@ public class CameraContext extends BaseCameraContext {
 
     public void capture(PictureCallback callback) {
         pictureCallback = callback;
-        Log.e(TAG, "capture: start");
+        PerformanceUtil.getInstance().logTraceStart("send-capture-command");
+        Log.e(TAG, "capture: start isAfStateOk = " + isAfStateOk);
         if (isAutoFocusCanDo && isNeedAePreCapture()) {
             status = STATUS_WAITING_FOR_SHOT;
-            onTouchAF(0, 0);
+            if (!isAfStateOk) {
+                sendAfTriggerCaptureRequest();
+            }
         } else {
             doCapture();
         }
@@ -775,6 +799,9 @@ public class CameraContext extends BaseCameraContext {
                     captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
                     captureBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
                     captureBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+                    captureBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
+
+//                    captureBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
                     Integer afMode = previewCaptureRequestBuilder.get(CaptureRequest.CONTROL_AF_MODE);
                     Log.d(TAG, "doCapture af mode = " + afMode);
                     if (afMode != null) {
@@ -783,6 +810,7 @@ public class CameraContext extends BaseCameraContext {
 
                     updateFlashMode(captureBuilder, currentFlashMode);
                     captureBuilder.addTarget(jpegImageReader.getSurface());
+                    long consume = PerformanceUtil.getInstance().logTraceEnd("send-capture-command");
                     cameraCaptureSession.capture(captureBuilder.build(), new CameraCaptureSession.CaptureCallback() {
                         @Override
                         public void onCaptureCompleted(@NonNull CameraCaptureSession session,
@@ -790,6 +818,7 @@ public class CameraContext extends BaseCameraContext {
                                                        @NonNull TotalCaptureResult result) {
                             super.onCaptureCompleted(session, request, result);
                             Log.d(TAG, "onCaptureCompleted: doCapture");
+                            resetNormalPreview();
                         }
 
                         @Override
@@ -801,7 +830,7 @@ public class CameraContext extends BaseCameraContext {
                             resetNormalPreview();
                         }
                     }, null);
-
+                    Log.e(TAG, "run: send-capture-command consume = " + consume);
                 } catch (CameraAccessException e) {
                     e.printStackTrace();
                 }
@@ -864,5 +893,9 @@ public class CameraContext extends BaseCameraContext {
         } else {
             Log.e(TAG, "testCall: ");
         }
+    }
+
+    public void test() {
+        Log.d(TAG, "test: ");
     }
 }

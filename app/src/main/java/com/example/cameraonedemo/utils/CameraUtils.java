@@ -1,6 +1,7 @@
 package com.example.cameraonedemo.utils;
 
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -9,6 +10,7 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraMetadata;
 import android.os.Build;
 import android.view.Surface;
+import android.view.WindowManager;
 
 import androidx.annotation.RequiresApi;
 
@@ -174,5 +176,22 @@ public class CameraUtils {
         }
 
         return result;
+    }
+
+    public static int getDisplayRotation(Context context) {
+        WindowManager wm = (WindowManager) context
+                .getSystemService(Context.WINDOW_SERVICE);
+        int rotation = wm.getDefaultDisplay().getRotation();
+        switch (rotation) {
+            case Surface.ROTATION_0:
+                return 0;
+            case Surface.ROTATION_90:
+                return 90;
+            case Surface.ROTATION_180:
+                return 180;
+            case Surface.ROTATION_270:
+                return 270;
+        }
+        return 0;
     }
 }

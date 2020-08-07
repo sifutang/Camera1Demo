@@ -59,6 +59,7 @@ public class Camera2Activity extends BaseActivity
 
         findViewById(R.id.switch_btn).setOnClickListener(this);
         findViewById(R.id.capture_btn).setOnClickListener(this);
+        findViewById(R.id.codec_btn).setOnClickListener(this);
 
         cameraContext = new CameraContext(this);
     }
@@ -176,6 +177,12 @@ public class Camera2Activity extends BaseActivity
 
             case R.id.picture_image_view:
                 pictureImageView.setVisibility(View.INVISIBLE);
+                break;
+
+            case R.id.codec_btn:
+                if (cameraContext != null) {
+                    cameraContext.test();
+                }
                 break;
 
             default:
