@@ -9,12 +9,20 @@ import android.hardware.Camera;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraMetadata;
 import android.os.Build;
+import android.util.Log;
 import android.view.Surface;
 import android.view.WindowManager;
 
 import androidx.annotation.RequiresApi;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
 public class CameraUtils {
+
+    private static final String TAG = "CameraUtils";
 
     public static int getCameraDisplayOrientation(Activity activity, int cameraId) {
         Camera.CameraInfo info = new Camera.CameraInfo();
@@ -193,5 +201,50 @@ public class CameraUtils {
                 return 270;
         }
         return 0;
+    }
+
+    private static String sCpuName;
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    public static String getCpuName() {
+        if (sCpuName == null) {
+            try(BufferedReader br = Files.newBufferedReader(Paths.get("/proc/cpuinfo"))) {
+                String tmp;
+                String[] array;
+                while((tmp = br.readLine()) != null){
+                    if (tmp.contains("Hardware")) {
+                        array = tmp.split(":\\s+", 2);
+                        if (array.length > 1) {
+                            Log.d(TAG,"Hardware :"+array[1]);
+                            tmp = array[1];
+                            if(tmp != null && tmp.length()>0){
+                                sCpuName = tmp;
+                            }
+                            break;
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return sCpuName;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    public static boolean isMTKPlatform() {
+        if (sCpuName == null) {
+            sCpuName = getCpuName();
+        }
+
+        return sCpuName != null && sCpuName.startsWith("MT");
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    public static boolean isQCPlatform() {
+        if (sCpuName == null) {
+            sCpuName = getCpuName();
+        }
+
+        return sCpuName != null && (sCpuName.contains("Qualcomm") || sCpuName.contains("MSM"));
     }
 }
