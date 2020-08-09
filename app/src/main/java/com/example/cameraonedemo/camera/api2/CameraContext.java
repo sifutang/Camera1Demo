@@ -734,7 +734,7 @@ public class CameraContext extends BaseCameraContext {
         pictureCallback = callback;
         PerformanceUtil.getInstance().logTraceStart("send-capture-command");
         Log.e(TAG, "capture: start isAfStateOk = " + isAfStateOk);
-        if (mIsUseTorchModeWhenFlashOnOptional) {
+        if (mIsUseTorchModeWhenFlashOnOptional && FLASH_MODE_ON.equals(currentFlashMode)) {
             status = STATUS_WAITING_AE_AF_CONVERGED_FOR_SHOT;
 
             // torch
