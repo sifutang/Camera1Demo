@@ -34,7 +34,6 @@ import androidx.annotation.RequiresApi;
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.utils.CameraUtils;
 import com.example.cameraonedemo.utils.ImageReaderManager;
-import com.example.cameraonedemo.utils.Logger;
 import com.example.cameraonedemo.utils.PerformanceUtil;
 
 import java.io.File;
@@ -48,6 +47,7 @@ import java.util.List;
 public class CameraContext extends BaseCameraContext {
 
     private static final String TAG = "CameraContext";
+    private static final String CAPTURE_REQUEST_TAG_FOR_SHOT = "CAPTURE_REQUEST_TAG_FOR_SHOT";
 
     private static final MeteringRectangle[] ZERO_WEIGHT_3A_REGION = new MeteringRectangle[]{
             new MeteringRectangle(0, 0, 0, 0, 0)
@@ -81,7 +81,6 @@ public class CameraContext extends BaseCameraContext {
     private boolean isAfStateOk = false;
     private boolean isAutoFocusCanDo = false;
     private int status = STATUS_IDLE;
-    private int requestCode = -1;
 
     private PictureCallback pictureCallback;
 
@@ -124,6 +123,7 @@ public class CameraContext extends BaseCameraContext {
         public void onCaptureCompleted(@NonNull CameraCaptureSession session,
                                        @NonNull CaptureRequest request,
                                        @NonNull TotalCaptureResult result) {
+
             cropRect = result.get(CaptureResult.SCALER_CROP_REGION);
 
             Integer afMode = result.get(CaptureResult.CONTROL_AF_MODE);
@@ -174,13 +174,13 @@ public class CameraContext extends BaseCameraContext {
             }
 
             if (status == STATUS_WAITING_AE_AF_CONVERGED_FOR_SHOT) {
-                if (requestCode == request.hashCode()) {
+                if (CAPTURE_REQUEST_TAG_FOR_SHOT.equals(request.getTag())) {
                     isShotCanDo = true;
-                    Log.d(TAG, "onCaptureCompleted: is shot can do");
+                    Log.e(TAG, "onCaptureCompleted: is shot can do"  + ", request tag = " + request.getTag());
                 }
 
                 if (!isShotCanDo) {
-                    Log.e(TAG, "onCaptureCompleted: discard previous callback");
+                    Log.i(TAG, "onCaptureCompleted: discard previous callback");
                     return;
                 }
 
@@ -206,7 +206,7 @@ public class CameraContext extends BaseCameraContext {
                                     @NonNull CaptureRequest request,
                                     @NonNull CaptureFailure failure) {
             if (status == STATUS_WAITING_AE_AF_CONVERGED_FOR_SHOT) {
-                if (requestCode == request.hashCode()) {
+                if (CAPTURE_REQUEST_TAG_FOR_SHOT.equals(request.getTag())) {
                     isShotCanDo = true;
                     Log.d(TAG, "onCaptureFailed: ");
                 }
@@ -219,7 +219,7 @@ public class CameraContext extends BaseCameraContext {
                                         @NonNull Surface target,
                                         long frameNumber) {
             if (status == STATUS_WAITING_AE_AF_CONVERGED_FOR_SHOT) {
-                if (requestCode == request.hashCode()) {
+                if (CAPTURE_REQUEST_TAG_FOR_SHOT.equals(request.getTag())) {
                     isShotCanDo = true;
                     Log.d(TAG, "onCaptureBufferLost: ");
                 }
@@ -254,9 +254,10 @@ public class CameraContext extends BaseCameraContext {
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
         // ae trigger start
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+        previewCaptureRequestBuilder.setTag(CAPTURE_REQUEST_TAG_FOR_SHOT);
         CaptureRequest request = previewCaptureRequestBuilder.build();
-        requestCode = request.hashCode();
         capture(request);
+        previewCaptureRequestBuilder.setTag(null);
 
         // trigger idle
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
@@ -271,7 +272,7 @@ public class CameraContext extends BaseCameraContext {
 
         // effect preview
         updatePreview(previewCaptureRequestBuilder);
-        Log.d(TAG, "sendAeAfTriggerCaptureRequest: " + requestCode);
+        Log.d(TAG, "sendAeAfTriggerCaptureRequest");
     }
 
     public CameraContext(Context context) {
@@ -743,9 +744,11 @@ public class CameraContext extends BaseCameraContext {
            // af trigger
             previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
             previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+
+            previewCaptureRequestBuilder.setTag(CAPTURE_REQUEST_TAG_FOR_SHOT);
             CaptureRequest request = previewCaptureRequestBuilder.build();
-            requestCode = request.hashCode();
             capture(request);
+            previewCaptureRequestBuilder.setTag(null);
 
             // trigger idle
             previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
