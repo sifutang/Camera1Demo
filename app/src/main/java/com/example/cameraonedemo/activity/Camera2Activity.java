@@ -60,6 +60,9 @@ public class Camera2Activity extends BaseActivity
         findViewById(R.id.switch_btn).setOnClickListener(this);
         findViewById(R.id.capture_btn).setOnClickListener(this);
         findViewById(R.id.codec_btn).setOnClickListener(this);
+        findViewById(R.id.ec_down_btn).setOnClickListener(this);
+        findViewById(R.id.ec_up_btn).setOnClickListener(this);
+        findViewById(R.id.ae_lock_btn).setOnClickListener(this);
 
         cameraContext = new CameraContext(this);
     }
@@ -182,6 +185,24 @@ public class Camera2Activity extends BaseActivity
             case R.id.codec_btn:
                 if (cameraContext != null) {
                     cameraContext.test();
+                }
+                break;
+
+            case R.id.ec_down_btn:
+                if (cameraContext != null) {
+                    cameraContext.onExposureChanged(true);
+                }
+                break;
+
+            case R.id.ec_up_btn:
+                if (cameraContext != null) {
+                    cameraContext.onExposureChanged(false);
+                }
+                break;
+
+            case R.id.ae_lock_btn:
+                if (cameraContext != null) {
+                    cameraContext.setAeLock();
                 }
                 break;
 

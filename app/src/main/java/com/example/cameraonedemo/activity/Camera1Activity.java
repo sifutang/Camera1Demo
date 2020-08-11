@@ -20,6 +20,7 @@ import android.view.SurfaceHolder;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import com.example.cameraonedemo.camera.api1.CameraContext;
 import com.example.cameraonedemo.camera.api1.CameraInfo;
@@ -115,6 +116,11 @@ public class Camera1Activity extends BaseActivity
 
         mFocusMeteringView = findViewById(R.id.focus_metering_view);
         mFaceView = findViewById(R.id.face_view);
+
+        findViewById(R.id.ec_down_btn).setOnClickListener(this);
+        findViewById(R.id.ec_up_btn).setOnClickListener(this);
+        findViewById(R.id.ae_lock_btn).setOnClickListener(this);
+
 
         mCameraContext = new CameraContext(this);
     }
@@ -305,6 +311,20 @@ public class Camera1Activity extends BaseActivity
                 text = FLASH_OPTIONAL_SET[index];
                 flashOptionalBtn.setText(text);
                 mCameraContext.switchFlashMode(text);
+            }
+        } else if (v.getId() == R.id.ec_down_btn) {
+            if (mCameraContext != null) {
+                int value = mCameraContext.onExposureChanged(true);
+                Toast.makeText(this, "ec = " + value, Toast.LENGTH_SHORT).show();
+            }
+        } else if (v.getId() == R.id.ec_up_btn) {
+            if (mCameraContext != null) {
+                int value = mCameraContext.onExposureChanged(false);
+                Toast.makeText(this, "ec = " + value, Toast.LENGTH_SHORT).show();
+            }
+        } else if (v.getId() == R.id.ae_lock_btn) {
+            if (mCameraContext != null) {
+                mCameraContext.setAeLock();
             }
         }
     }

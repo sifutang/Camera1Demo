@@ -18,6 +18,7 @@ import com.example.cameraonedemo.utils.PerformanceUtil;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,6 +50,9 @@ public class CameraContext extends BaseCameraContext {
     private PreviewCallback callback;
     private FocusStatusCallback mFocusStatusCallback;
     private FaceDetectionListener mFaceDetectionListener;
+
+    private static final int FRAME_RATE_WINDOW = 30;
+    private ArrayDeque<Long> mFrameTimestamps = new ArrayDeque<>(5);
 
     private Camera.AutoFocusMoveCallback cafCallback = new Camera.AutoFocusMoveCallback() {
         @Override
@@ -125,12 +129,14 @@ public class CameraContext extends BaseCameraContext {
             Log.d(TAG, "video size w " + size.width + ", h = " + size.height);
         }
         parameters.setPreviewSize(previewWidth, previewHeight);
-        parameters.setPictureSize(800, 600);
+//        parameters.set("video-size", "640x480");
+        parameters.setPictureSize(1280, 720);
 
         if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
             parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
             camera.setAutoFocusMoveCallback(cafCallback);
         }
+//        parameters.setRecordingHint(false);
         camera.setParameters(parameters);
 
         displayOrientation = 0;
@@ -147,6 +153,19 @@ public class CameraContext extends BaseCameraContext {
         camera.setPreviewCallback(new Camera.PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
+                long currentTime = System.currentTimeMillis();
+                mFrameTimestamps.push(currentTime);
+
+                while (mFrameTimestamps.size() >= FRAME_RATE_WINDOW) mFrameTimestamps.removeLast();
+
+                Long timestampFirst = mFrameTimestamps.peekFirst();
+                timestampFirst = timestampFirst == null ? currentTime : timestampFirst;
+                Long timestampLast = mFrameTimestamps.peekLast();
+                timestampLast = timestampLast == null ? currentTime : timestampLast;
+
+                int size = Math.max(1, mFrameTimestamps.size());
+                double framesPerSecond = 1.0 / ((timestampFirst - timestampLast) / (size * 1.0)) * 1000.0;
+//                Log.d(TAG, "onPreviewFrame: fps = " + framesPerSecond);
                 if (callback != null) {
                     callback.onPreviewFrame(data);
                 }
@@ -189,8 +208,14 @@ public class CameraContext extends BaseCameraContext {
 
     public void capture(final PictureCallback callback) {
         if (camera != null) {
+            Camera.Size pictureSize = parameters.getPictureSize();
+            Log.e(TAG, "capture: start, picture size w = " + pictureSize.width + ", h = " + pictureSize.height + ", ec = " + parameters.getExposureCompensation());
+            final long start = System.currentTimeMillis();
             rotation = getCaptureRotation(displayOrientation);
             parameters.setRotation(rotation);
+//            parameters.setRecordingHint(false);
+            parameters.setExposureCompensation(currentExposureValue);
+            parameters.setAutoExposureLock(true);
             camera.setParameters(parameters);
             camera.takePicture(new Camera.ShutterCallback() {
                 /**
@@ -202,20 +227,24 @@ public class CameraContext extends BaseCameraContext {
                  */
                 @Override
                 public void onShutter() {
-                    Log.d(TAG, "onShutter: ");
+                    Log.e(TAG, "onShutter: consume = " + (System.currentTimeMillis() - start));
                 }
             }, new Camera.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] data, Camera camera) {
                     // raw data
-                    Log.d(TAG, "onPictureTaken: raw");
+                    Log.d(TAG, "capture onPictureTaken: raw");
                 }
             }, new Camera.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] data, Camera camera) {
+                    parameters.setAutoExposureLock(false);
+                    camera.setParameters(parameters);
                     camera.startPreview();
 
-                    Log.d(TAG, "onPictureTaken");
+                    Log.e(TAG, "capture onPictureTaken consume = " + (System.currentTimeMillis() - start)
+                            + ", ec = " + parameters.getExposureCompensation()
+                            + ", isAeLock = " + parameters.getAutoExposureLock());
                     if (callback != null) {
                         callback.onPictureTaken(data);
                     }
@@ -435,5 +464,49 @@ public class CameraContext extends BaseCameraContext {
         if (camera != null) {
             camera.setParameters(parameters);
         }
+    }
+
+    private int currentExposureValue = 0;
+    public int onExposureChanged(boolean isDown) {
+        Log.d(TAG, "onExposureChanged: " + isDown);
+        if (parameters == null) {
+            return -1;
+        }
+
+        int max = parameters.getMaxExposureCompensation();
+        int min = parameters.getMinExposureCompensation();
+        if (max == min && min == 0) {
+            Log.e(TAG, "onExposureChanged: not support");
+            return -1;
+        }
+
+        int ec = parameters.getExposureCompensation();
+        float step = parameters.getExposureCompensationStep();
+
+        Log.d(TAG, "onExposureChanged: ex = " + ec + ", step = " + step + ", max = " + max + ", min = " + min);
+
+        int diff = (int) (max * step);
+        int exposureValue = currentExposureValue;
+        if (isDown) {
+            exposureValue -= diff;
+            exposureValue = Math.max(exposureValue, min);
+        } else {
+            exposureValue += diff;
+            exposureValue = Math.min(exposureValue, max);
+        }
+        if (exposureValue == currentExposureValue) {
+            return exposureValue;
+        }
+
+        currentExposureValue = exposureValue;
+        parameters.setExposureCompensation(currentExposureValue);
+        camera.setParameters(parameters);
+        return exposureValue;
+    }
+
+    private boolean isAeLock = false;
+    public void setAeLock() {
+        isAeLock = !isAeLock;
+        Log.d(TAG, "setAeLock: " + isAeLock);
     }
 }

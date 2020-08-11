@@ -24,6 +24,8 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
+import android.util.Range;
+import android.util.Rational;
 import android.util.Size;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -234,7 +236,7 @@ public class CameraContext extends BaseCameraContext {
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
 
         // ae
-        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, currentExposureValue);
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
 
@@ -263,7 +265,7 @@ public class CameraContext extends BaseCameraContext {
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
 
-        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, currentExposureValue);
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
 
@@ -365,6 +367,7 @@ public class CameraContext extends BaseCameraContext {
                 mCameraCharacteristics =
                         cameraManager.getCameraCharacteristics(String.valueOf(curCameraId));
                 isAutoFocusCanDo = CameraUtils.isSupportAutoFocus(mCameraCharacteristics);
+                currentExposureValue = 0;
             } catch (CameraAccessException e) {
                 e.printStackTrace();;
             }
@@ -688,9 +691,10 @@ public class CameraContext extends BaseCameraContext {
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
 
-                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, currentExposureValue);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
 
                         // effect preview
                         updatePreview(previewCaptureRequestBuilder);
@@ -729,7 +733,7 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
-    private boolean mIsUseTorchModeWhenFlashOnOptional = true;
+    private boolean mIsUseTorchModeWhenFlashOnOptional = false;
     public void capture(PictureCallback callback) {
         pictureCallback = callback;
         PerformanceUtil.getInstance().logTraceStart("send-capture-command");
@@ -754,7 +758,7 @@ public class CameraContext extends BaseCameraContext {
             previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
             previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
 
-            previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+            previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, currentExposureValue);
             previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
             previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
 
@@ -780,7 +784,7 @@ public class CameraContext extends BaseCameraContext {
                     captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getCaptureOrientation());
                     captureBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
                     captureBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
-                    captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+                    captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, currentExposureValue);
                     captureBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
                     captureBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
                     captureBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
@@ -861,21 +865,66 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
-    private void testCall() {
-        if (CamcorderProfile.hasProfile(0, CamcorderProfile.QUALITY_HIGH_SPEED_720P)) {
-            CamcorderProfile profile = CamcorderProfile.get(
-                    0, CamcorderProfile.QUALITY_HIGH_SPEED_720P
-            );
-            Log.e(TAG, "hight speed 720p: audioCodec = " + profile.audioCodec
-                    + ", videoCodec = " + profile.videoCodec
-                    + ", videoBitRate = " + profile.videoBitRate
-                    + ", videoFrameRate = " + profile.videoFrameRate
-                    + ", w = " + profile.videoFrameWidth
-                    + ", h = " + profile.videoFrameHeight
-                    + ", outputFormat = " + profile.fileFormat);
-        } else {
-            Log.e(TAG, "testCall: ");
+    private int currentExposureValue = 0;
+    public int onExposureChanged(boolean isDown) {
+        Range<Integer> exposureRange = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+        Rational exposureStep = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
+        if (exposureRange == null) {
+            return -1;
         }
+
+        if (exposureStep == null) {
+            return -1;
+        }
+
+        if ((exposureRange.getUpper().equals(exposureRange.getLower()))
+                && (exposureRange.getLower() == 0)) {
+            return -1;
+        }
+
+        Log.d(TAG, "onExposureChanged: exposureRange range " + exposureRange + ", exposureStep = " + exposureStep);
+        int step = (int) (exposureRange.getUpper() * exposureStep.doubleValue());
+        int exposureValue = currentExposureValue;
+        if (isDown) {
+            exposureValue -= step;
+            exposureValue = Math.max(exposureValue, exposureRange.getLower());
+        } else {
+            exposureValue += step;
+            exposureValue = Math.min(exposureValue, exposureRange.getUpper());
+        }
+        if (exposureValue == currentExposureValue) {
+            return -1;
+        }
+
+        currentExposureValue = exposureValue;
+        Log.d(TAG, "onExposureChanged: currentExposureValue = " + exposureValue);
+
+        if (previewCaptureRequestBuilder == null) {
+            return -1;
+        }
+
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, currentExposureValue);
+                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, isAeLock);
+                updatePreview(previewCaptureRequestBuilder);
+            }
+        });
+        return exposureValue;
+    }
+
+    private boolean isAeLock = false;
+    public void setAeLock() {
+        isAeLock = !isAeLock;
+        Log.d(TAG, "setAeLock: " + isAeLock);
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, isAeLock);
+                updatePreview(previewCaptureRequestBuilder);
+            }
+        });
     }
 
     public void test() {
