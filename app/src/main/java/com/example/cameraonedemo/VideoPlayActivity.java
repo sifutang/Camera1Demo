@@ -9,15 +9,19 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
+import android.widget.SeekBar;
 import android.widget.Toast;
 
 import java.io.File;
 
 public class VideoPlayActivity extends AppCompatActivity
-        implements TextureView.SurfaceTextureListener {
+        implements TextureView.SurfaceTextureListener, SeekBar.OnSeekBarChangeListener {
 
     private static final String TAG = "VideoPlayActivity";
     private MediaPlayer mMediaPlayer;
+
+    private SeekBar mSeekBar;
+    private int mVideoDuration = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,6 +30,9 @@ public class VideoPlayActivity extends AppCompatActivity
 
         TextureView textureView = findViewById(R.id.texture_view);
         textureView.setSurfaceTextureListener(this);
+
+        mSeekBar = findViewById(R.id.seek_bar);
+        mSeekBar.setOnSeekBarChangeListener(this);
     }
 
     @Override
@@ -36,6 +43,9 @@ public class VideoPlayActivity extends AppCompatActivity
         if (mMediaPlayer != null) {
             mMediaPlayer.setSurface(new Surface(surface));
             mMediaPlayer.start();
+            mVideoDuration = mMediaPlayer.getDuration();
+            mSeekBar.setMax(mVideoDuration);
+            Log.d(TAG, "onSurfaceTextureAvailable: duration = " + mVideoDuration);
         } else {
             Log.e(TAG, "onSurfaceTextureAvailable: create media player failed, file exit = "
                     + videoFile.exists());
@@ -59,6 +69,22 @@ public class VideoPlayActivity extends AppCompatActivity
 
     @Override
     public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+        int position =  mMediaPlayer.getCurrentPosition();
+        mSeekBar.setProgress(position);
+    }
+
+    @Override
+    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+
+    }
+
+    @Override
+    public void onStartTrackingTouch(SeekBar seekBar) {
+
+    }
+
+    @Override
+    public void onStopTrackingTouch(SeekBar seekBar) {
 
     }
 }
