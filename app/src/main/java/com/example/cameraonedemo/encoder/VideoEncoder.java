@@ -1,5 +1,6 @@
 package com.example.cameraonedemo.encoder;
 
+import android.content.Context;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaCodec;
@@ -56,6 +57,7 @@ public class VideoEncoder {
 
     private int width;
     private int height;
+    private Context context;
 
     public interface VideoEncodeListener {
         void onVideoEncodeStart();
@@ -75,9 +77,10 @@ public class VideoEncoder {
         }
     }
 
-    public VideoEncoder(int w, int h) {
+    public VideoEncoder(Context context, int w, int h) {
         this.width = w;
         this.height = h;
+        this.context = context;
         executor.submit(new Runnable() {
             @Override
             public void run() {
@@ -134,7 +137,8 @@ public class VideoEncoder {
         );
 
         // muxer
-        File videoFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/mux.mp4");
+//        File videoFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/mux.mp4");
+        File  videoFile = new File(context.getFilesDir().getAbsoluteFile() + "/mux.mp4");
         try {
             mediaMuxer = new MediaMuxer(videoFile.getAbsolutePath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
             mediaMuxer.setOrientationHint(90);

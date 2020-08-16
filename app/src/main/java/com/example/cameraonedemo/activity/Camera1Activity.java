@@ -257,7 +257,11 @@ public class Camera1Activity extends BaseActivity
         } else if (v.getId() == R.id.codec_btn) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
                 if (mVideoEncoder == null) {
-                    mVideoEncoder = new VideoEncoder(mCameraContext.getPreviewWidth(), mCameraContext.getPreviewHeight());
+                    mVideoEncoder = new VideoEncoder(
+                            getApplicationContext(),
+                            mCameraContext.getPreviewWidth(),
+                            mCameraContext.getPreviewHeight()
+                    );
                 }
 
                 if (!mVideoEncoder.isStart()) {

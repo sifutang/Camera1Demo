@@ -22,6 +22,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         findViewById(R.id.btn_camera1).setOnClickListener(this);
         findViewById(R.id.btn_camera2).setOnClickListener(this);
+        findViewById(R.id.btn_video_play).setOnClickListener(this);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -47,6 +48,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.btn_camera2:
                 startActivity(new Intent(MainActivity.this, Camera2Activity.class));
                 break;
+            case R.id.btn_video_play:
+                startActivity(new Intent(MainActivity.this, VideoPlayActivity.class));
             default:
                 break;
         }

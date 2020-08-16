@@ -34,7 +34,8 @@ public class CameraContext extends BaseCameraContext {
     // for video
     private MediaRecorder mediaRecorder;
     private volatile boolean isRecording = false;
-    private File videoFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/test.mp4");
+    private File videoFile =
+            new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/test.mp4");
 
 
     private boolean isFaceDetectStarted = false;
