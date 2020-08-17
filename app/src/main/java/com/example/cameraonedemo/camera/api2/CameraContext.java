@@ -90,6 +90,8 @@ public class CameraContext extends BaseCameraContext {
     private Rect cropRect = null;
     private float curZoomRatio = 1f;
 
+    private boolean mIsUseTorchModeWhenFlashOnOptional = true;
+
     private ImageReader.OnImageAvailableListener jpegImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
@@ -246,7 +248,7 @@ public class CameraContext extends BaseCameraContext {
 
         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
 
-        if (mIsUseTorchModeWhenFlashOnOptional && currentFlashMode.equals(FLASH_MODE_ON)) {
+        if (isSimulateFlashOnCanDo()) {
             switchFlashMode(FLASH_MODE_ON);
         }
 
@@ -736,12 +738,11 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
-    private boolean mIsUseTorchModeWhenFlashOnOptional = false;
     public void capture(PictureCallback callback) {
         pictureCallback = callback;
         PerformanceUtil.getInstance().logTraceStart("send-capture-command");
         Log.e(TAG, "capture: start isAfStateOk = " + isAfStateOk);
-        if (mIsUseTorchModeWhenFlashOnOptional && FLASH_MODE_ON.equals(currentFlashMode)) {
+        if (isSimulateFlashOnCanDo()) {
             status = STATUS_WAITING_AE_AF_CONVERGED_FOR_SHOT;
 
             // torch
@@ -778,6 +779,10 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
+    private boolean isSimulateFlashOnCanDo() {
+        return mIsUseTorchModeWhenFlashOnOptional && FLASH_MODE_ON.equals(currentFlashMode);
+    }
+
     private void doCapture() {
         handler.post(new Runnable() {
             @Override
@@ -796,7 +801,7 @@ public class CameraContext extends BaseCameraContext {
                         captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, afMode);
                     }
 
-                    if (mIsUseTorchModeWhenFlashOnOptional) {
+                    if (isSimulateFlashOnCanDo()) {
                         updateFlashMode(captureBuilder, FLASH_MODE_TORCH);
                     } else {
                         updateFlashMode(captureBuilder, currentFlashMode);
