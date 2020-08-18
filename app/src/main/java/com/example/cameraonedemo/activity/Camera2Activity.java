@@ -108,7 +108,7 @@ public class Camera2Activity extends BaseActivity
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+    public void surfaceChanged(SurfaceHolder holder, int format, final int width, final int height) {
         Log.d(TAG, "surfaceChanged: format = " + format + ", w = " + width + ", h = " + height);
 
         surfaceView.setOnTouchListener(new View.OnTouchListener() {
@@ -116,7 +116,7 @@ public class Camera2Activity extends BaseActivity
             public boolean onTouch(View v, MotionEvent event) {
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
                     if (cameraContext != null) {
-                        cameraContext.onSingleTap(event.getX(), event.getY());
+                        cameraContext.onSingleTap(event.getX(), event.getY(), width, height);
                     }
                 }
 

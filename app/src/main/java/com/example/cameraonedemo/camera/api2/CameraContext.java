@@ -3,6 +3,7 @@ package com.example.cameraonedemo.camera.api2;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -35,6 +36,7 @@ import androidx.annotation.RequiresApi;
 
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.utils.CameraUtils;
+import com.example.cameraonedemo.utils.CoordinateTransformer;
 import com.example.cameraonedemo.utils.ImageReaderManager;
 import com.example.cameraonedemo.utils.PerformanceUtil;
 
@@ -672,19 +674,35 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
-    public void onSingleTap(float x, float y) {
+    public void onSingleTap(float x, float y, int width, int height) {
+        if (mPreviewRect == null) {
+            mPreviewRect = new Rect(0, 0, height, width);
+        } else {
+            mPreviewRect.set(0, 0, height, width);
+        }
+
+        if (mCoordinateTransformer == null) {
+            mCoordinateTransformer = new CoordinateTransformer(mCameraCharacteristics, new RectF(mPreviewRect));
+        }
+
         if (isAutoFocusCanDo) {
             onTouchAF(x, y);
         }
         Log.d(TAG, "onSingleTap: x = " + x + ", y = " + y);
     }
 
-    private void onTouchAF(float x, float y) {
+    private void onTouchAF(final float x, final float y) {
         if (previewCaptureRequestBuilder != null) {
             handler.post(new Runnable() {
                 @Override
                 public void run() {
                     if (previewCaptureRequestBuilder != null) {
+                        MeteringRectangle rect = calcTapAreaForCamera2(200, 1000, x, y);
+
+                        AFRegions = new MeteringRectangle[]{rect};
+                        AERegions = new MeteringRectangle[]{rect};
+                        Log.d(TAG, "run: AERegions = " + Arrays.toString(AERegions) + ", AFRegions = " + Arrays.toString(AFRegions));
+
                         // maybe trigger cancel if previous trigger not done.
                         // ..
                         // trigger start
@@ -694,10 +712,10 @@ public class CameraContext extends BaseCameraContext {
 
                         // trigger idle
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
-                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, ZERO_WEIGHT_3A_REGION);
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, AFRegions);
 
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, currentExposureValue);
-                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
+                        previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, AERegions);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
                         previewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
 
@@ -937,5 +955,32 @@ public class CameraContext extends BaseCameraContext {
 
     public void test() {
         Log.d(TAG, "test: ");
+    }
+
+    private CoordinateTransformer mCoordinateTransformer;
+    private Rect mPreviewRect;
+    private MeteringRectangle[] AFRegions;
+    private MeteringRectangle[] AERegions;
+
+    private MeteringRectangle calcTapAreaForCamera2(int areaSize, int weight, float x, float y) {
+        int left = CameraUtils.constrain((int) x - areaSize / 2,
+                mPreviewRect.left, mPreviewRect.right - areaSize);
+        int top = CameraUtils.constrain((int) y - areaSize / 2,
+                mPreviewRect.top, mPreviewRect.bottom - areaSize);
+        RectF rectF = new RectF(left, top, left + areaSize, top + areaSize);
+        Log.d(TAG, "[calcTapAreaForCamera2: areaSize = " + areaSize + ", weight = " + weight
+                + ",\nx = " + x + ", y = " + y
+                + ",\nleft = " + left + ", top = " + top
+                + "]"
+        );
+
+        rectF = mCoordinateTransformer.toCameraSpace(rectF);
+        Rect focusRect = new Rect();
+        focusRect.left = Math.round(rectF.left);
+        focusRect.top = Math.round(rectF.top);
+        focusRect.right = Math.round(rectF.right);
+        focusRect.bottom = Math.round(rectF.bottom);
+
+        return new MeteringRectangle(focusRect, weight);
     }
 }
