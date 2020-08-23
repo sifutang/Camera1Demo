@@ -5,6 +5,10 @@ import android.graphics.Rect;
 import android.util.Log;
 import android.view.OrientationEventListener;
 
+import com.example.cameraonedemo.model.ModeItem;
+
+import java.io.File;
+
 public class BaseCameraContext {
     private static final String TAG = "BaseCameraContext";
 
@@ -14,6 +18,7 @@ public class BaseCameraContext {
     public static final String FLASH_MODE_TORCH = "Flash Torch";
 
     protected int displayOrientation = 0;
+    protected File mVideoFile;
     private MyOrientationEventListener orientationEventListener;
 
     private class MyOrientationEventListener extends OrientationEventListener {
@@ -51,6 +56,7 @@ public class BaseCameraContext {
     }
 
     public BaseCameraContext(Context context) {
+        mVideoFile = new File(context.getFilesDir().getAbsoluteFile() + "/test.mp4");
         orientationEventListener = new MyOrientationEventListener(context);
     }
 
@@ -60,5 +66,9 @@ public class BaseCameraContext {
 
     public void pause() {
         orientationEventListener.disable();
+    }
+
+    public void onCameraModeChanged(ModeItem modeItem) {
+
     }
 }

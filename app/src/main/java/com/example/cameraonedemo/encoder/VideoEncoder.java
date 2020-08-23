@@ -9,7 +9,6 @@ import android.media.MediaFormat;
 import android.media.MediaMuxer;
 import android.media.MediaRecorder;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -138,7 +137,7 @@ public class VideoEncoder {
 
         // muxer
 //        File videoFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/mux.mp4");
-        File  videoFile = new File(context.getFilesDir().getAbsoluteFile() + "/mux.mp4");
+        File  videoFile = new File(context.getFilesDir().getAbsoluteFile() + "/test.mp4");
         try {
             mediaMuxer = new MediaMuxer(videoFile.getAbsolutePath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
             mediaMuxer.setOrientationHint(90);

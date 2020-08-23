@@ -10,7 +10,7 @@
         android:id="@+id/btn_camera1"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Camera API 1"
+        android:text="相机1"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -20,7 +20,7 @@
         android:id="@+id/btn_camera2"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Camera API 2"
+        android:text="相机2"
         app:layout_constraintTop_toBottomOf="@+id/btn_camera1"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"/>
@@ -29,7 +29,7 @@
         android:id="@+id/btn_video_play"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Video Player"
+        android:text="播放器"
         app:layout_constraintTop_toBottomOf="@id/btn_camera2"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"/>

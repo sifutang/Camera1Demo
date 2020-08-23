@@ -15,13 +15,13 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.MeteringRectangle;
+import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.CamcorderProfile;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaCodec;
 import android.media.MediaRecorder;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
@@ -35,12 +35,13 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
+import com.example.cameraonedemo.model.ModeItem;
 import com.example.cameraonedemo.utils.CameraUtils;
+import com.example.cameraonedemo.utils.Constant;
 import com.example.cameraonedemo.utils.CoordinateTransformer;
 import com.example.cameraonedemo.utils.ImageReaderManager;
 import com.example.cameraonedemo.utils.PerformanceUtil;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -76,7 +77,6 @@ public class CameraContext extends BaseCameraContext {
     // for video
     private MediaRecorder mediaRecorder;
     private volatile boolean isRecording;
-    private File videoFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/test.mp4");
 
     private int curCameraId = -1;
     private String[] ids;
@@ -284,8 +284,10 @@ public class CameraContext extends BaseCameraContext {
         Log.d(TAG, "sendAeAfTriggerCaptureRequest");
     }
 
+    private Context mContext;
     public CameraContext(Context context) {
         super(context);
+        mContext = context;
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Log.d(TAG, "CameraContext: platform = " + CameraUtils.getCpuName());
@@ -438,6 +440,11 @@ public class CameraContext extends BaseCameraContext {
     private void createSession(final CameraDevice device) {
         configMediaRecorder();
 
+        StreamConfigurationMap streamConfigurationMap = mCameraCharacteristics
+                .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+        Size[] supportPreviewSize = streamConfigurationMap.getOutputSizes(SurfaceHolder.class);
+        Size size = CameraUtils.getBestPreviewSize(mContext, supportPreviewSize);
+        Log.d(TAG, "createSession: size = " + size);
         final List<Surface> surfaceList = new ArrayList<>();
         surfaceList.add(surfaceHolder.getSurface());
         surfaceList.add(codecSurface);
@@ -542,8 +549,8 @@ public class CameraContext extends BaseCameraContext {
             @Override
             public void run() {
                 isRecording = true;
-                if (videoFile.exists()) {
-                    boolean delete = videoFile.delete();
+                if (mVideoFile.exists()) {
+                    boolean delete = mVideoFile.delete();
                     Log.d(TAG, "startRecord: delete last file: " + delete);
                 }
                 if (mediaRecorder != null) {
@@ -565,7 +572,7 @@ public class CameraContext extends BaseCameraContext {
                 isRecording = false;
                 mediaRecorder.stop();
                 mediaRecorder.reset();
-                Log.d(TAG, "stopRecord: " + videoFile.getAbsolutePath());
+                Log.d(TAG, "stopRecord: " + mVideoFile.getAbsolutePath());
             }
         });
     }
@@ -601,8 +608,8 @@ public class CameraContext extends BaseCameraContext {
         mediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
         mediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);
         mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
-        Log.d(TAG, "startRecord: file = " + videoFile);
-        mediaRecorder.setOutputFile(videoFile.getAbsolutePath());
+        Log.d(TAG, "startRecord: file = " + mVideoFile);
+        mediaRecorder.setOutputFile(mVideoFile.getAbsolutePath());
         mediaRecorder.setOnErrorListener(new MediaRecorder.OnErrorListener() {
             @Override
             public void onError(MediaRecorder mr, int what, int extra) {
@@ -982,5 +989,19 @@ public class CameraContext extends BaseCameraContext {
         focusRect.bottom = Math.round(rectF.bottom);
 
         return new MeteringRectangle(focusRect, weight);
+    }
+
+    @Override
+    public void onCameraModeChanged(ModeItem modeItem) {
+        super.onCameraModeChanged(modeItem);
+        Log.d(TAG, "onCameraModeChanged: " + modeItem);
+        switch (modeItem.getId()) {
+            case Constant.MODE_ID_CAPTURE:
+                break;
+            case Constant.MODE_ID_RECORD:
+                break;
+            default:
+                break;
+        }
     }
 }

@@ -159,7 +159,7 @@ public class CameraUtils {
         }
     }
 
-    public static Camera.Size getBestPreviewSize(@NonNull Context context,
+    public static Camera.Size getBestPreviewCameraSize(@NonNull Context context,
                                                  @NonNull List<Camera.Size> supportPreviewSize) {
         WindowManager windowManager = (WindowManager)
                 context.getSystemService(Context.WINDOW_SERVICE);
@@ -176,6 +176,31 @@ public class CameraUtils {
 
             if (Math.abs(size.height * 1f / size.width - ratio) <= 0.003) {
                 if (result == null || result.height < size.height) {
+                    result = size;
+                }
+            }
+        }
+        return result;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static Size getBestPreviewSize(@NonNull Context context,
+                                          @NonNull Size[] supportPreviewSize) {
+        WindowManager windowManager = (WindowManager)
+                context.getSystemService(Context.WINDOW_SERVICE);
+        DisplayMetrics metrics = new DisplayMetrics();
+        windowManager.getDefaultDisplay().getMetrics(metrics);
+        Log.d(TAG, "getBestPreviewSize: winW = " + metrics.widthPixels + ", winH = " + metrics.heightPixels);
+        float ratio = metrics.widthPixels * 1f / metrics.heightPixels;
+        Size result = null;
+        for (Size size: supportPreviewSize) {
+            Log.i(TAG, "preview size w = " + size.getWidth() + ", h = " + size.getHeight());
+            if (size.getHeight() > metrics.widthPixels) {
+                continue;
+            }
+
+            if (Math.abs(size.getHeight() * 1f / size.getWidth() - ratio) <= 0.003) {
+                if (result == null || result.getHeight() < size.getHeight()) {
                     result = size;
                 }
             }

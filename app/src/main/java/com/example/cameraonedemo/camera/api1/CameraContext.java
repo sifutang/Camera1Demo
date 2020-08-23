@@ -6,15 +6,17 @@ import android.graphics.Rect;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
-import android.os.Environment;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.util.Log;
 import android.view.SurfaceHolder;
 
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
+import com.example.cameraonedemo.model.ModeItem;
 import com.example.cameraonedemo.utils.CameraUtils;
+import com.example.cameraonedemo.utils.Constant;
 import com.example.cameraonedemo.utils.PerformanceUtil;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -24,33 +26,31 @@ public class CameraContext extends BaseCameraContext {
 
     private static final String TAG = "CameraContext";
 
-    private Context context;
-    private Camera camera;
-    private Camera.Parameters parameters;
-    private CameraInfo currCameraInfo;
-    private SurfaceHolder surfaceHolder;
+    private Context mContext;
+    private Camera mCamera;
+    private Camera.Parameters mParameters;
+    private CameraInfo mCurCameraInfo;
+    private SurfaceHolder mSurfaceHolder;
 
     // for video
-    private MediaRecorder mediaRecorder;
-    private volatile boolean isRecording = false;
-    private File videoFile =
-            new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/test.mp4");
-
+    private MediaRecorder mMediaRecorder;
+    private volatile boolean mIsRecording = false;
 
     private boolean isFaceDetectStarted = false;
     private int cameraDisplayOrientation;
     private int rotation;
-    private int previewWidth = 1920;
-    private int previewHeight = 1080;
+    private int previewWidth = -1;
+    private int previewHeight = -1;
 
-    private String currentFlashMode = FLASH_MODE_OFF;
-
-    private PreviewCallback callback;
+    private PreviewCallback mPreviewCallback;
     private FocusStatusCallback mFocusStatusCallback;
     private FaceDetectionListener mFaceDetectionListener;
 
     private static final int FRAME_RATE_WINDOW = 30;
     private ArrayDeque<Long> mFrameTimestamps = new ArrayDeque<>(5);
+
+    private Handler mHandler;
+    private HandlerThread mHandlerThread;
 
     private Camera.AutoFocusMoveCallback cafCallback = new Camera.AutoFocusMoveCallback() {
         @Override
@@ -72,15 +72,21 @@ public class CameraContext extends BaseCameraContext {
 
     public CameraContext(Context context) {
         super(context);
-        this.context = context;
+        mContext = context;
+    }
+
+    public void init() {
+        mHandlerThread = new HandlerThread("camera1 thread");
+        mHandlerThread.start();
+        mHandler = new Handler(mHandlerThread.getLooper());
     }
 
     public void configSurfaceHolder(SurfaceHolder holder) {
-        surfaceHolder = holder;
+        mSurfaceHolder = holder;
     }
 
     public void setPreviewCallback(PreviewCallback callback) {
-        this.callback = callback;
+        mPreviewCallback = callback;
     }
 
     public void setFocusStatusCallback(FocusStatusCallback callback) {
@@ -91,14 +97,6 @@ public class CameraContext extends BaseCameraContext {
         mFaceDetectionListener = listener;
     }
 
-    public void resume() {
-        super.resume();
-    }
-
-    public void pause() {
-        super.pause();
-    }
-
     public int getPreviewHeight() {
         return previewHeight;
     }
@@ -107,54 +105,63 @@ public class CameraContext extends BaseCameraContext {
         return previewWidth;
     }
 
-    public void openCamera(int type) {
-        currCameraInfo = new CameraInfo(type);
-        final int cameraId = currCameraInfo.getCameraId();
-        camera = Camera.open(cameraId);
-        parameters = camera.getParameters();
+    public void openCamera(final int type) {
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                openCameraCore(type);
+            }
+        });
+    }
+
+    private void openCameraCore(int type) {
+        mCurCameraInfo = new CameraInfo(type);
+        final int cameraId = mCurCameraInfo.getCameraId();
+        mCamera = Camera.open(cameraId);
+        mParameters = mCamera.getParameters();
 
         // set preview size
-        List<Camera.Size> previewSizeList = parameters.getSupportedPreviewSizes();
-        Camera.Size bestPreviewSize = CameraUtils.getBestPreviewSize(context, previewSizeList);
+        List<Camera.Size> previewSizeList = mParameters.getSupportedPreviewSizes();
+        Camera.Size bestPreviewSize = CameraUtils.getBestPreviewCameraSize(mContext, previewSizeList);
         if (bestPreviewSize != null) {
             previewWidth = bestPreviewSize.width;
             previewHeight = bestPreviewSize.height;
             Log.d(TAG, "openCamera: previewWidth = " + previewWidth
                     + ", previewHeight = " + previewHeight);
-            parameters.setPreviewSize(previewWidth, previewHeight);
+            mParameters.setPreviewSize(previewWidth, previewHeight);
         } else {
             Log.e(TAG, "openCamera: preview size does't match");
         }
 
         // set picture size
-        List<Camera.Size> pictureSizeList = parameters.getSupportedPictureSizes();
+        List<Camera.Size> pictureSizeList = mParameters.getSupportedPictureSizes();
         Camera.Size bestPictureSize = CameraUtils.getBestPictureSize(pictureSizeList, CameraUtils.RATIO_4_3);
         if (bestPictureSize != null) {
             Log.d(TAG, "openCamera: pictureWidth = " + bestPictureSize.width
                     + ", pictureHeight = " + bestPictureSize.height);
-            parameters.setPictureSize(bestPictureSize.width, bestPictureSize.height);
+            mParameters.setPictureSize(bestPictureSize.width, bestPictureSize.height);
         } else {
             Log.e(TAG, "openCamera: picture size does't match");
         }
 
-        if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
-            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
-            camera.setAutoFocusMoveCallback(cafCallback);
+        if (mParameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
+            mParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+            mCamera.setAutoFocusMoveCallback(cafCallback);
         }
-        camera.setParameters(parameters);
+        mCamera.setParameters(mParameters);
 
         cameraDisplayOrientation = 0;
         try {
-            camera.setPreviewDisplay(surfaceHolder);
-            cameraDisplayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) context, cameraId);
-            camera.setDisplayOrientation(cameraDisplayOrientation);
+            mCamera.setPreviewDisplay(mSurfaceHolder);
+            cameraDisplayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) mContext, cameraId);
+            mCamera.setDisplayOrientation(cameraDisplayOrientation);
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        Log.d(TAG, "openCamera: " + currCameraInfo);
+        Log.d(TAG, "openCamera: " + mCurCameraInfo);
         PerformanceUtil.getInstance().logTraceStart("startPreview");
-        camera.setPreviewCallback(new Camera.PreviewCallback() {
+        mCamera.setPreviewCallback(new Camera.PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
                 long currentTime = System.currentTimeMillis();
@@ -170,21 +177,21 @@ public class CameraContext extends BaseCameraContext {
                 int size = Math.max(1, mFrameTimestamps.size());
                 double framesPerSecond = 1.0 / ((timestampFirst - timestampLast) / (size * 1.0)) * 1000.0;
                 Log.d(TAG, "onPreviewFrame: fps = " + framesPerSecond);
-                if (callback != null) {
-                    callback.onPreviewFrame(data);
+                if (mPreviewCallback != null) {
+                    mPreviewCallback.onPreviewFrame(data);
                 }
             }
         });
 
-        camera.startPreview();
+        mCamera.startPreview();
         long consume = PerformanceUtil.getInstance().logTraceEnd("startPreview");
         Log.d(TAG, "openCamera: start preview consume = " + consume);
-        int maxNumDetectedFaces = parameters.getMaxNumDetectedFaces();
+        int maxNumDetectedFaces = mParameters.getMaxNumDetectedFaces();
         Log.d(TAG, "openCamera: maxNumDetectedFaces = " + maxNumDetectedFaces);
         boolean isSupportFaceDetected = maxNumDetectedFaces > 0;
         if (isSupportFaceDetected) {
             isFaceDetectStarted = true;
-            camera.setFaceDetectionListener(new Camera.FaceDetectionListener() {
+            mCamera.setFaceDetectionListener(new Camera.FaceDetectionListener() {
                 @Override
                 public void onFaceDetection(Camera.Face[] faces, Camera camera) {
                     if (faces == null || faces.length == 0) {
@@ -206,22 +213,22 @@ public class CameraContext extends BaseCameraContext {
                     }
                 }
             });
-            camera.startFaceDetection();
+            mCamera.startFaceDetection();
         }
     }
 
     public void capture(final PictureCallback callback) {
-        if (camera != null) {
+        if (mCamera != null) {
             Log.e(TAG, "capture: start");
             final long start = System.currentTimeMillis();
             rotation = getCaptureRotation(displayOrientation);
 //            parameters.setRotation(rotation);
-            parameters.setExposureCompensation(currentExposureValue);
-            parameters.setAutoExposureLock(true);
-            camera.setParameters(parameters);
+            mParameters.setExposureCompensation(currentExposureValue);
+            mParameters.setAutoExposureLock(true);
+            mCamera.setParameters(mParameters);
 
             final int jpegRotation = rotation;
-            camera.takePicture(new Camera.ShutterCallback() {
+            mCamera.takePicture(new Camera.ShutterCallback() {
                 /**
                  * Called as near as possible to the moment when a photo is captured
                  * from the sensor.  This is a good opportunity to play a shutter sound
@@ -242,8 +249,8 @@ public class CameraContext extends BaseCameraContext {
             }, new Camera.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] data, Camera camera) {
-                    parameters.setAutoExposureLock(false);
-                    camera.setParameters(parameters);
+                    mParameters.setAutoExposureLock(false);
+                    camera.setParameters(mParameters);
                     camera.startPreview();
 
                     Log.e(TAG, "capture onPictureTaken consume = "
@@ -258,34 +265,49 @@ public class CameraContext extends BaseCameraContext {
 
     private int getCaptureRotation(int displayOrientation) {
         int degrees;
-        if (currCameraInfo.getFacing() == CameraInfo.CAMERA_FACING_FRONT) {
-            degrees = (currCameraInfo.getPictureNeedRotateOrientation() - displayOrientation + 360) % 360;
+        if (mCurCameraInfo.getFacing() == CameraInfo.CAMERA_FACING_FRONT) {
+            degrees = (mCurCameraInfo.getPictureNeedRotateOrientation() - displayOrientation + 360) % 360;
         } else { // back-facing camera
-            degrees = (currCameraInfo.getPictureNeedRotateOrientation() + displayOrientation) % 360;
+            degrees = (mCurCameraInfo.getPictureNeedRotateOrientation() + displayOrientation) % 360;
         }
 
         return degrees;
     }
 
-    public void switchCamera(int type) {
-        closeCamera();
-        openCamera(type);
+    public void switchCamera(final int type) {
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                closeCamera();
+                openCamera(type);
+            }
+        });
     }
 
     public void cancelAutoFocus() {
-        if (camera != null) {
-            camera.cancelAutoFocus();
-            Log.d(TAG, "cancelAutoFocus: ");
-        }
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (mCamera != null) {
+                    mCamera.cancelAutoFocus();
+                    Log.d(TAG, "cancelAutoFocus: ");
+                }
+            }
+        });
     }
 
     public void enableCaf() {
-        if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
-            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
-            camera.setAutoFocusMoveCallback(cafCallback);
-            camera.setParameters(parameters);
-            Log.d(TAG, "enableCaf: ");
-        }
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (mParameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
+                    mParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+                    mCamera.setAutoFocusMoveCallback(cafCallback);
+                    mCamera.setParameters(mParameters);
+                    Log.d(TAG, "enableCaf: ");
+                }
+            }
+        });
     }
 
     public void onTouchAF(float x, float y,
@@ -293,7 +315,7 @@ public class CameraContext extends BaseCameraContext {
                           int previewW, int previewH,
                           boolean isMirror) {
         // meter
-        int maxNumMeteringAreas = parameters.getMaxNumMeteringAreas();
+        int maxNumMeteringAreas = mParameters.getMaxNumMeteringAreas();
         if (maxNumMeteringAreas > 0) {
             Rect tapRect = CameraUtils.calculateTapArea(
                     focusW, focusH, x, y,
@@ -301,15 +323,15 @@ public class CameraContext extends BaseCameraContext {
             List<Camera.Area> meteringAreas = new ArrayList<>();
             Camera.Area area = new Camera.Area(tapRect, 1000);
             meteringAreas.add(area);
-            parameters.setMeteringAreas(meteringAreas);
-            camera.setParameters(parameters);
+            mParameters.setMeteringAreas(meteringAreas);
+            mCamera.setParameters(mParameters);
         }
 
         // focus
-        if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
-            camera.cancelAutoFocus();
-            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
-            int maxNumFocusAreas = parameters.getMaxNumFocusAreas();
+        if (mParameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
+            mCamera.cancelAutoFocus();
+            mParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+            int maxNumFocusAreas = mParameters.getMaxNumFocusAreas();
             if (maxNumFocusAreas > 0) {
                 List<Camera.Area> areas = new ArrayList<>();
                 Rect tapRect = CameraUtils.calculateTapArea(
@@ -317,33 +339,52 @@ public class CameraContext extends BaseCameraContext {
                         previewW, previewH, cameraDisplayOrientation,1.5f, isMirror);
                 Camera.Area area = new Camera.Area(tapRect, 1000);
                 areas.add(area);
-                parameters.setFocusAreas(areas);
+                mParameters.setFocusAreas(areas);
             }
-            camera.setParameters(parameters);
-            camera.autoFocus(afCallback);
-            camera.setAutoFocusMoveCallback(null);
+            mCamera.setParameters(mParameters);
+            mCamera.autoFocus(afCallback);
+            mCamera.setAutoFocusMoveCallback(null);
         }
     }
 
-    public void closeCamera() {
-        if (camera != null) {
+    private void closeCamera() {
+        if (mCamera != null) {
             if (isFaceDetectStarted) {
-                camera.setFaceDetectionListener(null);
-                camera.stopFaceDetection();
+                mCamera.setFaceDetectionListener(null);
+                mCamera.stopFaceDetection();
             }
-            camera.setPreviewCallback(null);
-            camera.stopPreview();
-            camera.release();
-            camera = null;
+            mCamera.setPreviewCallback(null);
+            mCamera.stopPreview();
+            mCamera.release();
+            mCamera = null;
+        }
+    }
+
+    public void release() {
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                closeCamera();
+                if (mMediaRecorder != null) {
+                    mMediaRecorder.release();
+                    mMediaRecorder = null;
+                }
+            }
+        });
+
+        if (mHandler != null) {
+            mHandlerThread.quitSafely();
+            mHandlerThread = null;
+            mHandler = null;
         }
     }
 
     public boolean isRecording() {
-        return isRecording;
+        return mIsRecording;
     }
 
     public boolean isFront() {
-        return currCameraInfo.isFront();
+        return mCurCameraInfo.isFront();
     }
 
     public int getDisplayOrientation() {
@@ -351,22 +392,22 @@ public class CameraContext extends BaseCameraContext {
     }
 
     public void startRecord() {
-        isRecording = true;
-        if (mediaRecorder == null) {
-            mediaRecorder = new MediaRecorder();
+        mIsRecording = true;
+        if (mMediaRecorder == null) {
+            mMediaRecorder = new MediaRecorder();
         }
-        mediaRecorder.reset();
+        mMediaRecorder.reset();
 
         // config media recorder start
-        camera.unlock();
+        mCamera.unlock();
         rotation = getCaptureRotation(displayOrientation);
-        mediaRecorder.setOrientationHint(rotation);
-        mediaRecorder.setCamera(camera);
-        mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-        mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+        mMediaRecorder.setOrientationHint(rotation);
+        mMediaRecorder.setCamera(mCamera);
+        mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
 
         CamcorderProfile profile = CamcorderProfile.get(
-                currCameraInfo.getCameraId(), CamcorderProfile.QUALITY_480P);
+                mCurCameraInfo.getCameraId(), CamcorderProfile.QUALITY_480P);
         Log.e(TAG, "startRecord: audioCodec = " + profile.audioCodec
                     + ", videoCodec = " + profile.videoCodec
                     + ", videoBitRate = " + profile.videoBitRate
@@ -375,61 +416,60 @@ public class CameraContext extends BaseCameraContext {
                     + ", h = " + profile.videoFrameHeight
                     + ", outputFormat = " + profile.fileFormat);
 
-        mediaRecorder.setOutputFormat(profile.fileFormat);
-        mediaRecorder.setAudioEncoder(profile.audioCodec);
-        mediaRecorder.setVideoEncoder(profile.videoCodec);
-        mediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
-        mediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);
-        mediaRecorder.setVideoFrameRate(profile.videoFrameRate);
+        mMediaRecorder.setOutputFormat(profile.fileFormat);
+        mMediaRecorder.setAudioEncoder(profile.audioCodec);
+        mMediaRecorder.setVideoEncoder(profile.videoCodec);
+        mMediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
+        mMediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);
+        mMediaRecorder.setVideoFrameRate(profile.videoFrameRate);
 
-        if (videoFile.exists()) {
-            boolean delete = videoFile.delete();
+        if (mVideoFile.exists()) {
+            boolean delete = mVideoFile.delete();
             Log.d(TAG, "startRecord: delete last file: " + delete);
         }
 
-        Log.d(TAG, "startRecord: file = " + videoFile);
-        mediaRecorder.setOutputFile(videoFile.getAbsolutePath());
-        mediaRecorder.setOnErrorListener(new MediaRecorder.OnErrorListener() {
+        Log.d(TAG, "startRecord: file = " + mVideoFile);
+        mMediaRecorder.setOutputFile(mVideoFile.getAbsolutePath());
+        mMediaRecorder.setOnErrorListener(new MediaRecorder.OnErrorListener() {
             @Override
             public void onError(MediaRecorder mr, int what, int extra) {
                 Log.d(TAG, "onError: what = " + what + ", extra = " + extra);
-                mediaRecorder.stop();
-                mediaRecorder.reset();
+                mMediaRecorder.stop();
+                mMediaRecorder.reset();
 
-                camera.startPreview();
+                mCamera.startPreview();
             }
         });
         // config media recorder end
 
         try {
-            mediaRecorder.prepare();
+            mMediaRecorder.prepare();
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        mediaRecorder.start();
+        mMediaRecorder.start();
 
         Log.d(TAG, "startRecord: ");
     }
 
     public void stopRecord() {
-        isRecording = false;
+        mIsRecording = false;
         Log.d(TAG, "stopRecord: ");
-        mediaRecorder.stop();
-        mediaRecorder.reset();
+        mMediaRecorder.stop();
+        mMediaRecorder.reset();
 
-        camera.startPreview();
+        mCamera.startPreview();
         enableCaf();
     }
 
     public void switchFlashMode(String flashMode) {
-        if (flashMode == null || parameters == null) {
+        if (flashMode == null || mParameters == null) {
             return;
         }
 
-        currentFlashMode = flashMode;
-        updateFlashMode(parameters, flashMode);
-        updatePreview(parameters);
+        updateFlashMode(mParameters, flashMode);
+        updatePreview(mParameters);
     }
 
     private void updateFlashMode(Camera.Parameters parameters, String flashMode) {
@@ -464,27 +504,27 @@ public class CameraContext extends BaseCameraContext {
     }
 
     private void updatePreview(Camera.Parameters parameters) {
-        if (camera != null) {
-            camera.setParameters(parameters);
+        if (mCamera != null) {
+            mCamera.setParameters(parameters);
         }
     }
 
     private int currentExposureValue = 0;
     public int onExposureChanged(boolean isDown) {
         Log.d(TAG, "onExposureChanged: " + isDown);
-        if (parameters == null) {
+        if (mParameters == null) {
             return -1;
         }
 
-        int max = parameters.getMaxExposureCompensation();
-        int min = parameters.getMinExposureCompensation();
+        int max = mParameters.getMaxExposureCompensation();
+        int min = mParameters.getMinExposureCompensation();
         if (max == min && min == 0) {
             Log.e(TAG, "onExposureChanged: not support");
             return -1;
         }
 
-        int ec = parameters.getExposureCompensation();
-        float step = parameters.getExposureCompensationStep();
+        int ec = mParameters.getExposureCompensation();
+        float step = mParameters.getExposureCompensationStep();
 
         Log.d(TAG, "onExposureChanged: ex = " + ec + ", step = " + step + ", max = " + max + ", min = " + min);
 
@@ -502,8 +542,8 @@ public class CameraContext extends BaseCameraContext {
         }
 
         currentExposureValue = exposureValue;
-        parameters.setExposureCompensation(currentExposureValue);
-        camera.setParameters(parameters);
+        mParameters.setExposureCompensation(currentExposureValue);
+        mCamera.setParameters(mParameters);
         return exposureValue;
     }
 
@@ -511,5 +551,19 @@ public class CameraContext extends BaseCameraContext {
     public void setAeLock() {
         isAeLock = !isAeLock;
         Log.d(TAG, "setAeLock: " + isAeLock);
+    }
+
+    @Override
+    public void onCameraModeChanged(ModeItem modeItem) {
+        super.onCameraModeChanged(modeItem);
+        Log.d(TAG, "onCameraModeChanged: " + modeItem);
+        switch (modeItem.getId()) {
+            case Constant.MODE_ID_CAPTURE:
+                break;
+            case Constant.MODE_ID_RECORD:
+                break;
+            default:
+                break;
+        }
     }
 }

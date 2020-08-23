@@ -22,6 +22,7 @@ import android.widget.Toast;
 import com.example.cameraonedemo.R;
 import com.example.cameraonedemo.camera.api2.CameraContext;
 import com.example.cameraonedemo.utils.AutoFitSurfaceView;
+import com.example.cameraonedemo.utils.Constant;
 
 import java.util.Arrays;
 
@@ -35,7 +36,6 @@ public class Camera2Activity extends BaseActivity
 
     private CameraContext cameraContext;
     private AutoFitSurfaceView surfaceView;
-    private Button recordBtn;
     private Button flashOptionalBtn;
     private ImageView pictureImageView;
     private MainHandler mainHandler = new MainHandler(Looper.getMainLooper());
@@ -43,13 +43,10 @@ public class Camera2Activity extends BaseActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_camera);
 
         surfaceView = findViewById(R.id.surface_view);
         surfaceView.getHolder().addCallback(this);
-
-        recordBtn = findViewById(R.id.record_btn);
-        recordBtn.setOnClickListener(this);
+//        surfaceView.getHolder().setFixedSize(2340, 1080);
 
         flashOptionalBtn = findViewById(R.id.flash_optional_btn);
         flashOptionalBtn.setOnClickListener(this);
@@ -59,7 +56,6 @@ public class Camera2Activity extends BaseActivity
 
         findViewById(R.id.switch_btn).setOnClickListener(this);
         findViewById(R.id.capture_btn).setOnClickListener(this);
-        findViewById(R.id.codec_btn).setOnClickListener(this);
         findViewById(R.id.ec_down_btn).setOnClickListener(this);
         findViewById(R.id.ec_up_btn).setOnClickListener(this);
         findViewById(R.id.ae_lock_btn).setOnClickListener(this);
@@ -134,21 +130,6 @@ public class Camera2Activity extends BaseActivity
     @Override
     public void onClick(View v) {
         switch (v.getId()) {
-            case R.id.record_btn:
-                if (cameraContext != null) {
-                    final String text;
-                    if (cameraContext.isRecording()) {
-                        cameraContext.stopRecord();
-                        text = "录像";
-                    } else {
-                        cameraContext.startRecord();
-                        text = "结束";
-                    }
-
-                    recordBtn.setText(text);
-                }
-                break;
-
             case R.id.switch_btn:
                 if (cameraContext != null) {
                     cameraContext.switchCamera();
@@ -167,25 +148,35 @@ public class Camera2Activity extends BaseActivity
                 break;
 
             case R.id.capture_btn:
-                if (cameraContext != null) {
-                    cameraContext.capture(new CameraContext.PictureCallback() {
-                        @Override
-                        public void onPictureTaken(byte[] data, int jpegRotation) {
-                            Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-                            mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_IMAGE_VIEW, bitmap));
+                if (mModeId == Constant.MODE_ID_CAPTURE) {
+                    if (cameraContext != null) {
+                        cameraContext.capture(new CameraContext.PictureCallback() {
+                            @Override
+                            public void onPictureTaken(byte[] data, int jpegRotation) {
+                                Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                                mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_IMAGE_VIEW, bitmap));
+                            }
+                        });
+                    }
+                } else if (mModeId == Constant.MODE_ID_RECORD) {
+                    if (cameraContext != null) {
+                        final String text;
+                        if (cameraContext.isRecording()) {
+                            cameraContext.stopRecord();
+                            text = "录像";
+                        } else {
+                            cameraContext.startRecord();
+                            text = "结束";
                         }
-                    });
+
+                        mCaptureBtn.setText(text);
+                    }
                 }
+
                 break;
 
             case R.id.picture_image_view:
                 pictureImageView.setVisibility(View.INVISIBLE);
-                break;
-
-            case R.id.codec_btn:
-                if (cameraContext != null) {
-                    cameraContext.test();
-                }
                 break;
 
             case R.id.ec_down_btn:
