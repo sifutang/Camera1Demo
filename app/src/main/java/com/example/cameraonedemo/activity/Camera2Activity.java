@@ -170,7 +170,7 @@ public class Camera2Activity extends BaseActivity
                 if (cameraContext != null) {
                     cameraContext.capture(new CameraContext.PictureCallback() {
                         @Override
-                        public void onPictureTaken(byte[] data) {
+                        public void onPictureTaken(byte[] data, int jpegRotation) {
                             Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
                             mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_IMAGE_VIEW, bitmap));
                         }

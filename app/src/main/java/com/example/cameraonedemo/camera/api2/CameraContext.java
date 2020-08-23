@@ -104,7 +104,7 @@ public class CameraContext extends BaseCameraContext {
                 byte[] jpeg = new byte[byteBuffer.capacity()];
                 byteBuffer.get(jpeg);
                 if (pictureCallback != null) {
-                    pictureCallback.onPictureTaken(jpeg);
+                    pictureCallback.onPictureTaken(jpeg, 0);
                     pictureCallback = null;
                 }
                 image.close();

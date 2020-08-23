@@ -9,16 +9,20 @@ import android.hardware.Camera;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraMetadata;
 import android.os.Build;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.Size;
 import android.view.Surface;
 import android.view.WindowManager;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.List;
 
 public class CameraUtils {
 
@@ -153,6 +157,45 @@ public class CameraUtils {
                 nv21[i] = temp;
             }
         }
+    }
+
+    public static Camera.Size getBestPreviewSize(@NonNull Context context,
+                                                 @NonNull List<Camera.Size> supportPreviewSize) {
+        WindowManager windowManager = (WindowManager)
+                context.getSystemService(Context.WINDOW_SERVICE);
+        DisplayMetrics metrics = new DisplayMetrics();
+        windowManager.getDefaultDisplay().getMetrics(metrics);
+        Log.d(TAG, "getBestPreviewSize: winW = " + metrics.widthPixels + ", winH = " + metrics.heightPixels);
+        float ratio = metrics.widthPixels * 1f / metrics.heightPixels;
+        Camera.Size result = null;
+        for (Camera.Size size: supportPreviewSize) {
+            Log.i(TAG, "preview size w = " + size.width + ", h = " + size.height);
+            if (size.height > metrics.widthPixels) {
+                continue;
+            }
+
+            if (Math.abs(size.height * 1f / size.width - ratio) <= 0.003) {
+                if (result == null || result.height < size.height) {
+                    result = size;
+                }
+            }
+        }
+        return result;
+    }
+
+    public static final float RATIO_4_3 = 4.0f / 3;
+    public static Camera.Size getBestPictureSize(@NonNull List<Camera.Size> supportPictureSize, float targetRatio) {
+        Camera.Size result = null;
+        for (Camera.Size size: supportPictureSize) {
+            Log.i(TAG, "picture size w = " + size.width + ", h = " + size.height);
+            if (Math.abs(size.width * 1f / size.height - targetRatio) <= 0.003) {
+                if (result == null || result.width < size.width) {
+                    result = size;
+                }
+            }
+        }
+
+        return result;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)

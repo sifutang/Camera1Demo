@@ -34,7 +34,7 @@ public class BaseCameraContext {
     }
 
     public interface PictureCallback {
-        void onPictureTaken(byte[] data);
+        void onPictureTaken(byte[] data, int jpegRotation);
     }
 
     public interface PreviewCallback {

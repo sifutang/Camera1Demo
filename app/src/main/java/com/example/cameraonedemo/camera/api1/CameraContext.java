@@ -2,9 +2,7 @@ package com.example.cameraonedemo.camera.api1;
 
 import android.app.Activity;
 import android.content.Context;
-import android.graphics.Matrix;
 import android.graphics.Rect;
-import android.graphics.RectF;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
@@ -40,7 +38,7 @@ public class CameraContext extends BaseCameraContext {
 
 
     private boolean isFaceDetectStarted = false;
-    private int displayOrientation;
+    private int cameraDisplayOrientation;
     private int rotation;
     private int previewWidth = 1920;
     private int previewHeight = 1080;
@@ -114,36 +112,42 @@ public class CameraContext extends BaseCameraContext {
         final int cameraId = currCameraInfo.getCameraId();
         camera = Camera.open(cameraId);
         parameters = camera.getParameters();
+
+        // set preview size
         List<Camera.Size> previewSizeList = parameters.getSupportedPreviewSizes();
-        for (Camera.Size size: previewSizeList) {
-            Log.d(TAG, "preview size w " + size.width + ", h = " + size.height);
+        Camera.Size bestPreviewSize = CameraUtils.getBestPreviewSize(context, previewSizeList);
+        if (bestPreviewSize != null) {
+            previewWidth = bestPreviewSize.width;
+            previewHeight = bestPreviewSize.height;
+            Log.d(TAG, "openCamera: previewWidth = " + previewWidth
+                    + ", previewHeight = " + previewHeight);
+            parameters.setPreviewSize(previewWidth, previewHeight);
+        } else {
+            Log.e(TAG, "openCamera: preview size does't match");
         }
 
+        // set picture size
         List<Camera.Size> pictureSizeList = parameters.getSupportedPictureSizes();
-        for (Camera.Size size: pictureSizeList) {
-            Log.d(TAG, "picture size w " + size.width + ", h = " + size.height);
+        Camera.Size bestPictureSize = CameraUtils.getBestPictureSize(pictureSizeList, CameraUtils.RATIO_4_3);
+        if (bestPictureSize != null) {
+            Log.d(TAG, "openCamera: pictureWidth = " + bestPictureSize.width
+                    + ", pictureHeight = " + bestPictureSize.height);
+            parameters.setPictureSize(bestPictureSize.width, bestPictureSize.height);
+        } else {
+            Log.e(TAG, "openCamera: picture size does't match");
         }
-
-        List<Camera.Size> videoSizeList = parameters.getSupportedVideoSizes();
-        for (Camera.Size size: pictureSizeList) {
-            Log.d(TAG, "video size w " + size.width + ", h = " + size.height);
-        }
-        parameters.setPreviewSize(previewWidth, previewHeight);
-//        parameters.set("video-size", "640x480");
-        parameters.setPictureSize(1280, 720);
 
         if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
             parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
             camera.setAutoFocusMoveCallback(cafCallback);
         }
-//        parameters.setRecordingHint(false);
         camera.setParameters(parameters);
 
-        displayOrientation = 0;
+        cameraDisplayOrientation = 0;
         try {
             camera.setPreviewDisplay(surfaceHolder);
-            displayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) context, cameraId);
-            camera.setDisplayOrientation(displayOrientation);
+            cameraDisplayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) context, cameraId);
+            camera.setDisplayOrientation(cameraDisplayOrientation);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -165,7 +169,7 @@ public class CameraContext extends BaseCameraContext {
 
                 int size = Math.max(1, mFrameTimestamps.size());
                 double framesPerSecond = 1.0 / ((timestampFirst - timestampLast) / (size * 1.0)) * 1000.0;
-//                Log.d(TAG, "onPreviewFrame: fps = " + framesPerSecond);
+                Log.d(TAG, "onPreviewFrame: fps = " + framesPerSecond);
                 if (callback != null) {
                     callback.onPreviewFrame(data);
                 }
@@ -208,15 +212,15 @@ public class CameraContext extends BaseCameraContext {
 
     public void capture(final PictureCallback callback) {
         if (camera != null) {
-            Camera.Size pictureSize = parameters.getPictureSize();
-            Log.e(TAG, "capture: start, picture size w = " + pictureSize.width + ", h = " + pictureSize.height + ", ec = " + parameters.getExposureCompensation());
+            Log.e(TAG, "capture: start");
             final long start = System.currentTimeMillis();
             rotation = getCaptureRotation(displayOrientation);
-            parameters.setRotation(rotation);
-//            parameters.setRecordingHint(false);
+//            parameters.setRotation(rotation);
             parameters.setExposureCompensation(currentExposureValue);
             parameters.setAutoExposureLock(true);
             camera.setParameters(parameters);
+
+            final int jpegRotation = rotation;
             camera.takePicture(new Camera.ShutterCallback() {
                 /**
                  * Called as near as possible to the moment when a photo is captured
@@ -242,11 +246,10 @@ public class CameraContext extends BaseCameraContext {
                     camera.setParameters(parameters);
                     camera.startPreview();
 
-                    Log.e(TAG, "capture onPictureTaken consume = " + (System.currentTimeMillis() - start)
-                            + ", ec = " + parameters.getExposureCompensation()
-                            + ", isAeLock = " + parameters.getAutoExposureLock());
+                    Log.e(TAG, "capture onPictureTaken consume = "
+                            + (System.currentTimeMillis() - start));
                     if (callback != null) {
-                        callback.onPictureTaken(data);
+                        callback.onPictureTaken(data, jpegRotation);
                     }
                 }
             });
@@ -294,7 +297,7 @@ public class CameraContext extends BaseCameraContext {
         if (maxNumMeteringAreas > 0) {
             Rect tapRect = CameraUtils.calculateTapArea(
                     focusW, focusH, x, y,
-                    previewW, previewH, displayOrientation, 1.0f, isMirror);
+                    previewW, previewH, cameraDisplayOrientation, 1.0f, isMirror);
             List<Camera.Area> meteringAreas = new ArrayList<>();
             Camera.Area area = new Camera.Area(tapRect, 1000);
             meteringAreas.add(area);
@@ -311,7 +314,7 @@ public class CameraContext extends BaseCameraContext {
                 List<Camera.Area> areas = new ArrayList<>();
                 Rect tapRect = CameraUtils.calculateTapArea(
                         focusW, focusH, x, y,
-                        previewW, previewH, displayOrientation,1.5f, isMirror);
+                        previewW, previewH, cameraDisplayOrientation,1.5f, isMirror);
                 Camera.Area area = new Camera.Area(tapRect, 1000);
                 areas.add(area);
                 parameters.setFocusAreas(areas);
@@ -344,7 +347,7 @@ public class CameraContext extends BaseCameraContext {
     }
 
     public int getDisplayOrientation() {
-        return displayOrientation;
+        return cameraDisplayOrientation;
     }
 
     public void startRecord() {

@@ -8,8 +8,10 @@ import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.hardware.Camera;
+import android.media.ExifInterface;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -31,6 +33,8 @@ import com.example.cameraonedemo.utils.AutoFitSurfaceView;
 import com.example.cameraonedemo.view.FaceView;
 import com.example.cameraonedemo.view.FocusMeteringView;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -230,11 +234,21 @@ public class Camera1Activity extends BaseActivity
                     if (mCameraContext != null) {
                         mCameraContext.capture(new CameraContext.PictureCallback() {
                             @Override
-                            public void onPictureTaken(byte[] data) {
+                            public void onPictureTaken(byte[] data, int jpegRotation) {
+                                Log.d(TAG, "onPictureTaken: rotation = " + jpegRotation);
+
                                 Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
                                 if (bitmap == null) {
                                     return;
                                 }
+
+                                if (jpegRotation != 0) {
+                                    Matrix matrix = new Matrix();
+                                    matrix.postRotate(jpegRotation);
+                                    bitmap = Bitmap.createBitmap(bitmap,
+                                            0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+                                }
+
                                 mPictureImageView.setImageBitmap(bitmap);
                                 mPictureImageView.setVisibility(View.VISIBLE);
                             }
