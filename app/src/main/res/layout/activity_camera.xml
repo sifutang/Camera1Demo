@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     tools:context=".activity.Camera1Activity">
 
-    <com.example.cameraonedemo.utils.AutoFitSurfaceView
+    <com.example.cameraonedemo.view.AutoFitSurfaceView
         android:id="@+id/surface_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

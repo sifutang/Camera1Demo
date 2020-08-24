@@ -67,7 +67,6 @@ public class CameraContext extends BaseCameraContext {
     private CameraManager cameraManager;
     private CameraDevice cameraDevice;
     private CameraCaptureSession cameraCaptureSession;
-    private SurfaceHolder surfaceHolder;
     private Surface codecSurface;
     private CaptureRequest.Builder previewCaptureRequestBuilder;
     private ImageReader jpegImageReader;
@@ -81,7 +80,7 @@ public class CameraContext extends BaseCameraContext {
     private int curCameraId = -1;
     private String[] ids;
     private String currentFlashMode = CameraContext.FLASH_MODE_OFF;
-
+    private int jpegRotation;
     private boolean isAfStateOk = false;
     private boolean isAutoFocusCanDo = false;
     private int status = STATUS_IDLE;
@@ -104,7 +103,7 @@ public class CameraContext extends BaseCameraContext {
                 byte[] jpeg = new byte[byteBuffer.capacity()];
                 byteBuffer.get(jpeg);
                 if (pictureCallback != null) {
-                    pictureCallback.onPictureTaken(jpeg, 0);
+                    pictureCallback.onPictureTaken(jpeg, jpegRotation);
                     pictureCallback = null;
                 }
                 image.close();
@@ -294,15 +293,15 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
+    @Override
     public void init() {
         handlerThread = new HandlerThread("camera2 thread");
         handlerThread.start();
         handler = new Handler(handlerThread.getLooper());
     }
 
-    public void openCamera(SurfaceHolder holder) {
-        surfaceHolder = holder;
-
+    @Override
+    public void openCamera() {
         handler.post(new Runnable() {
             @Override
             public void run() {
@@ -344,16 +343,34 @@ public class CameraContext extends BaseCameraContext {
                     }
                 }
 
-                openCamera();
+                openCameraCore();
             }
         });
     }
 
     @SuppressLint("MissingPermission")
-    private void openCamera() {
+    public void openCameraCore() {
         if (curCameraId != -1) {
             try {
                 PerformanceUtil.getInstance().logTraceStart("openCamera");
+
+                mCameraCharacteristics =
+                        cameraManager.getCameraCharacteristics(String.valueOf(curCameraId));
+                isAutoFocusCanDo = CameraUtils.isSupportAutoFocus(mCameraCharacteristics);
+                currentExposureValue = 0;
+                StreamConfigurationMap streamConfigurationMap = mCameraCharacteristics
+                        .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                assert streamConfigurationMap != null;
+                Size[] supportPreviewSize = streamConfigurationMap.getOutputSizes(SurfaceHolder.class);
+                Size size = CameraUtils.getBestPreviewSize(mContext, supportPreviewSize);
+                if (mOnCameraInfoListener != null) {
+                    if (size != null) {
+                        mOnCameraInfoListener.onCameraPreviewSizeChanged(size.getWidth(), size.getHeight());
+                    } else {
+                        Log.e(TAG, "openCameraCore: size is null");
+                    }
+                }
+
                 cameraManager.openCamera(String.valueOf(curCameraId), new CameraDevice.StateCallback() {
                     @Override
                     public void onOpened(@NonNull CameraDevice camera) {
@@ -372,13 +389,8 @@ public class CameraContext extends BaseCameraContext {
                         Log.d(TAG, "onError: " + error);
                     }
                 }, null);
-
-                mCameraCharacteristics =
-                        cameraManager.getCameraCharacteristics(String.valueOf(curCameraId));
-                isAutoFocusCanDo = CameraUtils.isSupportAutoFocus(mCameraCharacteristics);
-                currentExposureValue = 0;
             } catch (CameraAccessException e) {
-                e.printStackTrace();;
+                e.printStackTrace();
             }
             Log.e(TAG, "open camera id " + curCameraId + ", isAutoFocusCanDo = " + isAutoFocusCanDo);
         }
@@ -411,6 +423,7 @@ public class CameraContext extends BaseCameraContext {
         });
     }
 
+    @Override
     public void release() {
         closeCamera();
 
@@ -440,13 +453,10 @@ public class CameraContext extends BaseCameraContext {
     private void createSession(final CameraDevice device) {
         configMediaRecorder();
 
-        StreamConfigurationMap streamConfigurationMap = mCameraCharacteristics
-                .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-        Size[] supportPreviewSize = streamConfigurationMap.getOutputSizes(SurfaceHolder.class);
-        Size size = CameraUtils.getBestPreviewSize(mContext, supportPreviewSize);
-        Log.d(TAG, "createSession: size = " + size);
         final List<Surface> surfaceList = new ArrayList<>();
-        surfaceList.add(surfaceHolder.getSurface());
+        Log.d(TAG, "createSession: ");
+        // TODO: 2020/8/24 must make sure surface size is right
+        surfaceList.add(mSurfaceHolder.getSurface());
         surfaceList.add(codecSurface);
         jpegImageReader = ImageReaderManager
                 .getInstance().getJpegImageReader(pictureSize.getWidth(), pictureSize.getHeight());
@@ -491,47 +501,12 @@ public class CameraContext extends BaseCameraContext {
 //                    CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
 //                    builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
                     builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-                    builder.addTarget(surfaceHolder.getSurface());
+                    builder.addTarget(mSurfaceHolder.getSurface());
                     builder.addTarget(codecSurface);
                     CaptureRequest request = builder.build();
                     session.setRepeatingRequest(request, previewCallback, null);
                     previewCaptureRequestBuilder = builder;
 
-//                    if (Logger.DEBUG) {
-//                        List<CaptureRequest.Key<?>> keys = request.getKeys();
-//                        CaptureRequest.Key<?> meteringAvailableModeKey = null;
-//                        CaptureRequest.Key<?> meteringExposureMeteringModeKey = null;
-//                        for (CaptureRequest.Key<?> key: keys) {
-//                            String name = key.getName();
-//                            Log.d(TAG, "request key = " + name);
-//                            if ("org.codeaurora.qcamera3.exposure_metering.available_modes".equals(name)) {
-//                                meteringAvailableModeKey = key;
-//                            } else if ("org.codeaurora.qcamera3.exposure_metering.exposure_metering_mode".equals(name)) {
-//                                meteringExposureMeteringModeKey = key;
-//                            }
-//                        }
-//
-//                        if (meteringAvailableModeKey != null) {
-//                            Log.e(TAG, "meteringAvailableMode = " + request.get(meteringAvailableModeKey));
-//                            Log.e(TAG, "meteringExposureMeteringMode = " + request.get(meteringExposureMeteringModeKey));
-//                        } else {
-//                            Log.e(TAG, "meteringAvailableMode is null");
-//                        }
-//
-//                        Log.e(TAG, "run: ----------------------------------------segment-----------------------------");
-//                        List<CaptureRequest.Key<?>> requestKes = mCameraCharacteristics.getAvailableCaptureRequestKeys();
-//                        for (CaptureRequest.Key<?> key: requestKes) {
-//                            Log.d(TAG, "request key = " + key.getName());
-//                        }
-//
-//                        Log.e(TAG, "run: ----------------------------------------segment-----------------------------");
-//                        List<CaptureResult.Key<?>> resultKeys = mCameraCharacteristics.getAvailableCaptureResultKeys();
-//                        for (CaptureResult.Key<?> key: resultKeys) {
-//                            Log.d(TAG, "result key = " + key.getName());
-//                        }
-//
-//                        testCall();
-//                    }
                     switchFlashMode(FLASH_MODE_OFF);
                 } catch (CameraAccessException e) {
                     e.printStackTrace();
@@ -540,10 +515,12 @@ public class CameraContext extends BaseCameraContext {
         });
     }
 
+    @Override
     public boolean isRecording() {
         return isRecording;
     }
 
+    @Override
     public void startRecord() {
         handler.post(new Runnable() {
             @Override
@@ -564,7 +541,7 @@ public class CameraContext extends BaseCameraContext {
         });
     }
 
-
+    @Override
     public void stopRecord() {
         handler.post(new Runnable() {
             @Override
@@ -626,6 +603,7 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
+    @Override
     public void switchCamera() {
         if (ids == null || ids.length == 0) {
             return;
@@ -641,11 +619,12 @@ public class CameraContext extends BaseCameraContext {
             @Override
             public void run() {
                 closeCamera();
-                openCamera(surfaceHolder);
+                openCamera();
             }
         });
     }
 
+    @Override
     public void switchFlashMode(String flashMode) {
         if (flashMode == null || previewCaptureRequestBuilder == null) {
             return;
@@ -681,11 +660,15 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
-    public void onSingleTap(float x, float y, int width, int height) {
+    @Override
+    public void onTouchAF(float x, float y,
+                          int focusW, int focusH,
+                          int viewW, int viewH,
+                          boolean isMirror) {
         if (mPreviewRect == null) {
-            mPreviewRect = new Rect(0, 0, height, width);
+            mPreviewRect = new Rect(0, 0, viewH, viewW);
         } else {
-            mPreviewRect.set(0, 0, height, width);
+            mPreviewRect.set(0, 0, viewH, viewW);
         }
 
         if (mCoordinateTransformer == null) {
@@ -695,7 +678,7 @@ public class CameraContext extends BaseCameraContext {
         if (isAutoFocusCanDo) {
             onTouchAF(x, y);
         }
-        Log.d(TAG, "onSingleTap: x = " + x + ", y = " + y);
+        Log.d(TAG, "onTouchAF: x = " + x + ", y = " + y);
     }
 
     private void onTouchAF(final float x, final float y) {
@@ -763,6 +746,7 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
+    @Override
     public void capture(PictureCallback callback) {
         pictureCallback = callback;
         PerformanceUtil.getInstance().logTraceStart("send-capture-command");
@@ -814,7 +798,8 @@ public class CameraContext extends BaseCameraContext {
             public void run() {
                 try {
                     CaptureRequest.Builder captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-                    captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getCaptureOrientation());
+//                    captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getCaptureOrientation());
+                    jpegRotation = getCaptureOrientation();
                     captureBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
                     captureBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, ZERO_WEIGHT_3A_REGION);
                     captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, currentExposureValue);
@@ -873,6 +858,7 @@ public class CameraContext extends BaseCameraContext {
         return FLASH_MODE_AUTO.equals(currentFlashMode) || FLASH_MODE_ON.equals(currentFlashMode);
     }
 
+    @Override
     public void zoom(final float scaleFactor) {
         if (cropRect != null) {
             handler.post(new Runnable() {
@@ -899,6 +885,7 @@ public class CameraContext extends BaseCameraContext {
     }
 
     private int currentExposureValue = 0;
+    @Override
     public int onExposureChanged(boolean isDown) {
         Range<Integer> exposureRange = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
         Rational exposureStep = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
@@ -948,6 +935,7 @@ public class CameraContext extends BaseCameraContext {
     }
 
     private boolean isAeLock = false;
+    @Override
     public void setAeLock() {
         isAeLock = !isAeLock;
         Log.d(TAG, "setAeLock: " + isAeLock);
@@ -958,10 +946,6 @@ public class CameraContext extends BaseCameraContext {
                 updatePreview(previewCaptureRequestBuilder);
             }
         });
-    }
-
-    public void test() {
-        Log.d(TAG, "test: ");
     }
 
     private CoordinateTransformer mCoordinateTransformer;

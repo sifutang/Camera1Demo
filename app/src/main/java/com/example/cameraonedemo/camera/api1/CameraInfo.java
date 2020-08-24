@@ -14,7 +14,7 @@ public class CameraInfo {
      */
     public static final int CAMERA_FACING_FRONT = 1;
 
-    private Camera.CameraInfo cameraInfo;
+    private Camera.CameraInfo cameraInfo = null;
     private int cameraId;
 
     public CameraInfo(int facing) {
@@ -35,6 +35,22 @@ public class CameraInfo {
 
         cameraId = id;
         cameraInfo = info;
+    }
+
+    public CameraInfo() {
+
+    }
+
+    public void setCameraId(int cameraId) {
+        int cameraNum = Camera.getNumberOfCameras();
+        if (cameraId >= cameraNum || cameraId < 0) {
+            throw new IllegalStateException("Can't set camera id = " + cameraId);
+        }
+
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        Camera.getCameraInfo(cameraId, info);
+        this.cameraInfo = info;
+        this.cameraId = cameraId;
     }
 
     public int getCameraId() {

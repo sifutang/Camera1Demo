@@ -3,50 +3,60 @@ package com.example.cameraonedemo.activity;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
-import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
-import android.view.MotionEvent;
-import android.view.SurfaceHolder;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.example.cameraonedemo.R;
+import com.example.cameraonedemo.base.OnCameraInfoListener;
 import com.example.cameraonedemo.camera.api2.CameraContext;
-import com.example.cameraonedemo.utils.AutoFitSurfaceView;
 import com.example.cameraonedemo.utils.Constant;
 
 import java.util.Arrays;
 
 @RequiresApi(api = Build.VERSION_CODES.M)
 public class Camera2Activity extends BaseActivity
-        implements SurfaceHolder.Callback, View.OnClickListener {
+        implements View.OnClickListener, OnCameraInfoListener {
 
     private static final String TAG = "Camera2Activity";
 
     private static final int MSG_UPDATE_IMAGE_VIEW = 1000;
 
-    private CameraContext cameraContext;
-    private AutoFitSurfaceView surfaceView;
     private Button flashOptionalBtn;
     private ImageView pictureImageView;
     private MainHandler mainHandler = new MainHandler(Looper.getMainLooper());
 
+    private OnTouchEventListener mOnTouchEventListener = new OnTouchEventListener() {
+        @Override
+        public void onScale(float scaleFactor) {
+            Log.d(TAG, "onScale: " + scaleFactor);
+            if (mCameraContext != null) {
+                mCameraContext.zoom(scaleFactor);
+            }
+        }
+
+        @Override
+        public void onSingleTapUp(float x, float y) {
+            if (mCameraContext != null) {
+                mCameraContext.onTouchAF(x, y,
+                        200, 200, mPreviewWidth, mPreviewHeight, mCameraContext.isFront());
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        surfaceView = findViewById(R.id.surface_view);
-        surfaceView.getHolder().addCallback(this);
-//        surfaceView.getHolder().setFixedSize(2340, 1080);
 
         flashOptionalBtn = findViewById(R.id.flash_optional_btn);
         flashOptionalBtn.setOnClickListener(this);
@@ -60,112 +70,70 @@ public class Camera2Activity extends BaseActivity
         findViewById(R.id.ec_up_btn).setOnClickListener(this);
         findViewById(R.id.ae_lock_btn).setOnClickListener(this);
 
-        cameraContext = new CameraContext(this);
+        mCameraContext = new CameraContext(this);
+        mCameraContext.setOnCameraInfoListener(this);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        cameraContext.resume();
-        setOnTouchEventListener(new OnTouchEventListener() {
-            @Override
-            public void onScale(float scaleFactor) {
-                Log.d(TAG, "onScale: " + scaleFactor);
-                if (cameraContext != null) {
-                    cameraContext.zoom(scaleFactor);
-                }
-            }
-
-            @Override
-            public void onSingleTapUp(float x, float y) {
-
-            }
-        });
+        mCameraContext.resume();
+        setOnTouchEventListener(mOnTouchEventListener);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        cameraContext.pause();
+        mCameraContext.pause();
         setOnTouchEventListener(null);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-    }
-
-    @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        Log.d(TAG, "surfaceCreated: ");
-        cameraContext.init();
-        cameraContext.openCamera(holder);
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, final int width, final int height) {
-        Log.d(TAG, "surfaceChanged: format = " + format + ", w = " + width + ", h = " + height);
-
-        surfaceView.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                    if (cameraContext != null) {
-                        cameraContext.onSingleTap(event.getX(), event.getY(), width, height);
-                    }
-                }
-
-                return false;
-            }
-        });
-    }
-
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.d(TAG, "surfaceDestroyed: ");
-        cameraContext.release();
     }
 
     @Override
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.switch_btn:
-                if (cameraContext != null) {
-                    cameraContext.switchCamera();
+                if (mCameraContext != null) {
+                    mCameraContext.switchCamera();
                 }
                 break;
 
             case R.id.flash_optional_btn:
-                if (cameraContext != null) {
+                if (mCameraContext != null) {
                     String text = flashOptionalBtn.getText().toString();
                     int index = Arrays.asList(FLASH_OPTIONAL_SET).indexOf(text);
                     index = (index + 1) % FLASH_OPTIONAL_SET.length;
                     text = FLASH_OPTIONAL_SET[index];
                     flashOptionalBtn.setText(text);
-                    cameraContext.switchFlashMode(text);
+                    mCameraContext.switchFlashMode(text);
                 }
                 break;
 
             case R.id.capture_btn:
                 if (mModeId == Constant.MODE_ID_CAPTURE) {
-                    if (cameraContext != null) {
-                        cameraContext.capture(new CameraContext.PictureCallback() {
+                    if (mCameraContext != null) {
+                        mCameraContext.capture(new CameraContext.PictureCallback() {
                             @Override
                             public void onPictureTaken(byte[] data, int jpegRotation) {
                                 Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                                if (jpegRotation != 0) {
+                                    Matrix matrix = new Matrix();
+                                    matrix.postRotate(jpegRotation);
+                                    bitmap = Bitmap.createBitmap(bitmap,
+                                            0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+                                }
+
                                 mainHandler.sendMessage(mainHandler.obtainMessage(MSG_UPDATE_IMAGE_VIEW, bitmap));
                             }
                         });
                     }
                 } else if (mModeId == Constant.MODE_ID_RECORD) {
-                    if (cameraContext != null) {
+                    if (mCameraContext != null) {
                         final String text;
-                        if (cameraContext.isRecording()) {
-                            cameraContext.stopRecord();
+                        if (mCameraContext.isRecording()) {
+                            mCameraContext.stopRecord();
                             text = "录像";
                         } else {
-                            cameraContext.startRecord();
+                            mCameraContext.startRecord();
                             text = "结束";
                         }
 
@@ -180,20 +148,20 @@ public class Camera2Activity extends BaseActivity
                 break;
 
             case R.id.ec_down_btn:
-                if (cameraContext != null) {
-                    cameraContext.onExposureChanged(true);
+                if (mCameraContext != null) {
+                    mCameraContext.onExposureChanged(true);
                 }
                 break;
 
             case R.id.ec_up_btn:
-                if (cameraContext != null) {
-                    cameraContext.onExposureChanged(false);
+                if (mCameraContext != null) {
+                    mCameraContext.onExposureChanged(false);
                 }
                 break;
 
             case R.id.ae_lock_btn:
-                if (cameraContext != null) {
-                    cameraContext.setAeLock();
+                if (mCameraContext != null) {
+                    mCameraContext.setAeLock();
                 }
                 break;
 
@@ -201,6 +169,17 @@ public class Camera2Activity extends BaseActivity
                 Toast.makeText(this, "not impl", Toast.LENGTH_SHORT).show();
                 break;
         }
+    }
+
+    @Override
+    public void onCameraPreviewSizeChanged(final int w, final int h) {
+        Log.d(TAG, "onCameraPreviewSizeChanged: w = " + w + ", h = " + h);
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                mSurfaceView.setAspectRatio(w, h);
+            }
+        });
     }
 
     private class MainHandler extends Handler {

@@ -11,10 +11,9 @@ import android.view.GestureDetector;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
+import android.view.SurfaceHolder;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
-import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -26,13 +25,16 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.cameraonedemo.R;
 import com.example.cameraonedemo.camera.api2.CameraContext;
+import com.example.cameraonedemo.camera.common.ICameraContext;
 import com.example.cameraonedemo.model.ModeItem;
+import com.example.cameraonedemo.view.AutoFitSurfaceView;
 import com.example.cameraonedemo.utils.Constant;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class BaseActivity extends AppCompatActivity {
+public class BaseActivity extends AppCompatActivity
+        implements SurfaceHolder.Callback {
 
     private static final String TAG = "BaseActivity";
 
@@ -43,9 +45,12 @@ public class BaseActivity extends AppCompatActivity {
             CameraContext.FLASH_MODE_TORCH
     };
 
+    protected ICameraContext mCameraContext;
     protected int mModeId = Constant.MODE_ID_CAPTURE;
-
     protected Button mCaptureBtn;
+    protected AutoFitSurfaceView mSurfaceView;
+    protected int mPreviewWidth = 0;
+    protected int mPreviewHeight = 0;
 
     private MySensorEventListener mySensorEventListener;
     private Sensor accelerometer;
@@ -73,19 +78,13 @@ public class BaseActivity extends AppCompatActivity {
         Log.d(TAG, "onCameraModeChanged: "+ modeItem);
         mModeId = modeItem.getId();
         mCaptureBtn.setText(modeItem.getName());
+        mCameraContext.onCameraModeChanged(modeItem);
     }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-//        requestWindowFeature(Window.FEATURE_NO_TITLE);
-//        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-//                WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setContentView(R.layout.activity_camera);
-
-//        WindowManager.LayoutParams lp = getWindow().getAttributes();
-//        lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
-//        getWindow().setAttributes(lp);
 
         mySensorEventListener = new MySensorEventListener();
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -96,6 +95,9 @@ public class BaseActivity extends AppCompatActivity {
 
         initRecycleView();
         mCaptureBtn = findViewById(R.id.capture_btn);
+
+        mSurfaceView = findViewById(R.id.surface_view);
+        mSurfaceView.getHolder().addCallback(this);
     }
 
     private void initRecycleView() {
@@ -140,7 +142,7 @@ public class BaseActivity extends AppCompatActivity {
 
         @Override
         public void onSensorChanged(SensorEvent event) {
-//            Log.i(TAG, "onSensorChanged: " + event.values[0] + ", " + event.values[1] + ", " + event.values[2]);
+
         }
 
         @Override
@@ -258,5 +260,26 @@ public class BaseActivity extends AppCompatActivity {
                 mTextView = itemView.findViewById(R.id.text_view);
             }
         }
+    }
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        Log.d(TAG, "surfaceCreated: ");
+        mCameraContext.init();
+        mCameraContext.configSurfaceHolder(holder);
+        mCameraContext.openCamera();
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        Log.d(TAG, "surfaceChanged: w = " + width + ", h = " + height);
+        mPreviewWidth = width;
+        mPreviewHeight = height;
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        Log.d(TAG, "surfaceDestroyed: ");
+        mCameraContext.release();
     }
 }

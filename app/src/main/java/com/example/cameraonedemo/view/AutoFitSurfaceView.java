@@ -1,4 +1,4 @@
-package com.example.cameraonedemo.utils;
+package com.example.cameraonedemo.view;
 
 import android.content.Context;
 import android.util.AttributeSet;

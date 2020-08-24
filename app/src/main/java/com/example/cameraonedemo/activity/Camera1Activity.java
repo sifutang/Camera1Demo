@@ -3,42 +3,34 @@ package com.example.cameraonedemo.activity;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
-import android.annotation.SuppressLint;
-
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Rect;
-import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
-import android.view.SurfaceHolder;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.example.cameraonedemo.camera.api1.CameraContext;
-import com.example.cameraonedemo.camera.api1.CameraInfo;
 import com.example.cameraonedemo.R;
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.encoder.VideoEncoder;
-import com.example.cameraonedemo.model.ModeItem;
-import com.example.cameraonedemo.utils.AutoFitSurfaceView;
 import com.example.cameraonedemo.utils.Constant;
 import com.example.cameraonedemo.view.FaceView;
 import com.example.cameraonedemo.view.FocusMeteringView;
 
-import java.security.Policy;
 import java.util.Arrays;
 
 public class Camera1Activity extends BaseActivity
-        implements SurfaceHolder.Callback, View.OnClickListener {
+        implements View.OnClickListener {
 
     private static final String TAG = "MainActivity";
     private static final int MSG_CANCEL_AUTO_FOCUS = 1000;
@@ -52,10 +44,6 @@ public class Camera1Activity extends BaseActivity
     private FaceView mFaceView;
     private VideoEncoder mVideoEncoder;
 
-    private CameraContext mCameraContext;
-    private int mPreviewWidth = 0;
-    private int mPreviewHeight = 0;
-    private int mCurrentCameraIdType = Camera.CameraInfo.CAMERA_FACING_BACK;
     private MainHandler mMainHandler = new MainHandler(Looper.getMainLooper());
 
     private OnTouchEventListener mOnTouchEventListener = new OnTouchEventListener() {
@@ -76,27 +64,17 @@ public class Camera1Activity extends BaseActivity
 
             mMainHandler.removeMessages(MSG_CANCEL_AUTO_FOCUS);
             mMainHandler.sendEmptyMessageDelayed(MSG_CANCEL_AUTO_FOCUS, MSG_TOUCH_AF_LOCK_TIME_OUT);
-            final boolean isMirror = mCurrentCameraIdType == Camera.CameraInfo.CAMERA_FACING_FRONT;
             if (mCameraContext != null) {
                 mCameraContext.onTouchAF(x, y,
-                        200, 200, mPreviewWidth, mPreviewHeight, isMirror);
+                        200, 200, mPreviewWidth, mPreviewHeight, mCameraContext.isFront());
             }
         }
     };
-
-    @Override
-    public void onCameraModeChanged(ModeItem modeItem) {
-        super.onCameraModeChanged(modeItem);
-        mCameraContext.onCameraModeChanged(modeItem);
-    }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        AutoFitSurfaceView surfaceView = findViewById(R.id.surface_view);
-        surfaceView.getHolder().addCallback(this);
 
         mPictureImageView = findViewById(R.id.picture_image_view);
         mPictureImageView.setOnClickListener(this);
@@ -114,14 +92,12 @@ public class Camera1Activity extends BaseActivity
         findViewById(R.id.ec_up_btn).setOnClickListener(this);
         findViewById(R.id.ae_lock_btn).setOnClickListener(this);
 
-
         mCameraContext = new CameraContext(this);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        mCameraContext.init();
         mCameraContext.resume();
         mCameraContext.setFocusStatusCallback(new BaseCameraContext.FocusStatusCallback() {
             @Override
@@ -151,7 +127,6 @@ public class Camera1Activity extends BaseActivity
     @Override
     protected void onPause() {
         super.onPause();
-        mCameraContext.release();
         mCameraContext.pause();
         mCameraContext.setFocusStatusCallback(null);
         mMainHandler.removeCallbacksAndMessages(null);
@@ -160,36 +135,11 @@ public class Camera1Activity extends BaseActivity
     }
 
     @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        mCameraContext.configSurfaceHolder(holder);
-        mCameraContext.openCamera(mCurrentCameraIdType);
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        mPreviewWidth = width;
-        mPreviewHeight = height;
-        Log.d(TAG, "surfaceChanged: w = " + width + ", h = " + height);
-    }
-
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.d(TAG, "surfaceDestroyed: ");
-    }
-
-    @Override
     public void onClick(View v) {
         if (v.getId() == R.id.switch_btn) {
-            if (mCurrentCameraIdType == CameraInfo.CAMERA_FACING_BACK) {
-                mCurrentCameraIdType = CameraInfo.CAMERA_FACING_FRONT;
-            } else {
-                mCurrentCameraIdType = CameraInfo.CAMERA_FACING_BACK;
-            }
-
             mFocusMeteringView.reset();
             mFocusMeteringView.hide();
-            mCameraContext.switchCamera(mCurrentCameraIdType);
+            mCameraContext.switchCamera();
             mFaceView.clear();
         } else if (v.getId() == R.id.capture_btn) {
             if (mModeId == Constant.MODE_ID_CAPTURE) {

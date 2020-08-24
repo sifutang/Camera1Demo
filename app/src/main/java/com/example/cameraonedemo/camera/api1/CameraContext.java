@@ -9,7 +9,6 @@ import android.media.MediaRecorder;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
-import android.view.SurfaceHolder;
 
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.model.ModeItem;
@@ -20,6 +19,7 @@ import com.example.cameraonedemo.utils.PerformanceUtil;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class CameraContext extends BaseCameraContext {
@@ -30,17 +30,15 @@ public class CameraContext extends BaseCameraContext {
     private Camera mCamera;
     private Camera.Parameters mParameters;
     private CameraInfo mCurCameraInfo;
-    private SurfaceHolder mSurfaceHolder;
+    private int curCameraId = CameraInfo.CAMERA_FACING_BACK;
+    private String[] ids = null;
 
     // for video
     private MediaRecorder mMediaRecorder;
     private volatile boolean mIsRecording = false;
 
     private boolean isFaceDetectStarted = false;
-    private int cameraDisplayOrientation;
     private int rotation;
-    private int previewWidth = -1;
-    private int previewHeight = -1;
 
     private PreviewCallback mPreviewCallback;
     private FocusStatusCallback mFocusStatusCallback;
@@ -75,49 +73,82 @@ public class CameraContext extends BaseCameraContext {
         mContext = context;
     }
 
+    @Override
     public void init() {
         mHandlerThread = new HandlerThread("camera1 thread");
         mHandlerThread.start();
         mHandler = new Handler(mHandlerThread.getLooper());
+        int number = Camera.getNumberOfCameras();
+        if (number > 0) {
+            ids = new String[number];
+            for (int i = 0; i < number; i++) {
+                ids[i] = String.valueOf(i);
+            }
+        }
+        Log.d(TAG, "init: ");
     }
 
-    public void configSurfaceHolder(SurfaceHolder holder) {
-        mSurfaceHolder = holder;
+    @Override
+    public void release() {
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                closeCamera();
+                if (mMediaRecorder != null) {
+                    mMediaRecorder.release();
+                    mMediaRecorder = null;
+                }
+            }
+        });
+
+        if (mHandler != null) {
+            mHandlerThread.quitSafely();
+            mHandlerThread = null;
+            mHandler = null;
+        }
+        Log.d(TAG, "release: ");
     }
 
+    @Override
     public void setPreviewCallback(PreviewCallback callback) {
         mPreviewCallback = callback;
     }
 
+    @Override
     public void setFocusStatusCallback(FocusStatusCallback callback) {
         mFocusStatusCallback = callback;
     }
 
+    @Override
     public void setFaceDetectionListener(FaceDetectionListener listener) {
         mFaceDetectionListener = listener;
     }
 
+    @Override
     public int getPreviewHeight() {
         return previewHeight;
     }
 
+    @Override
     public int getPreviewWidth() {
         return previewWidth;
     }
 
-    public void openCamera(final int type) {
+    @Override
+    public void openCamera() {
         mHandler.post(new Runnable() {
             @Override
             public void run() {
-                openCameraCore(type);
+                openCameraCore();
             }
         });
     }
 
-    private void openCameraCore(int type) {
-        mCurCameraInfo = new CameraInfo(type);
-        final int cameraId = mCurCameraInfo.getCameraId();
-        mCamera = Camera.open(cameraId);
+    private void openCameraCore() {
+        mCurCameraInfo = new CameraInfo();
+        mCurCameraInfo.setCameraId(curCameraId);
+
+        mCamera = Camera.open(curCameraId);
         mParameters = mCamera.getParameters();
 
         // set preview size
@@ -153,7 +184,7 @@ public class CameraContext extends BaseCameraContext {
         cameraDisplayOrientation = 0;
         try {
             mCamera.setPreviewDisplay(mSurfaceHolder);
-            cameraDisplayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) mContext, cameraId);
+            cameraDisplayOrientation = CameraUtils.getCameraDisplayOrientation((Activity) mContext, curCameraId);
             mCamera.setDisplayOrientation(cameraDisplayOrientation);
         } catch (IOException e) {
             e.printStackTrace();
@@ -217,6 +248,7 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
+    @Override
     public void capture(final PictureCallback callback) {
         if (mCamera != null) {
             Log.e(TAG, "capture: start");
@@ -274,16 +306,29 @@ public class CameraContext extends BaseCameraContext {
         return degrees;
     }
 
-    public void switchCamera(final int type) {
+    @Override
+    public void switchCamera() {
+        if (ids == null || ids.length == 0) {
+            return;
+        }
+
+        int index = Arrays.asList(ids).indexOf(String.valueOf(curCameraId));
+        if (index >= 0) {
+            index = (index + 1) % ids.length;
+        }
+
+        curCameraId = Integer.parseInt(ids[index]);
+
         mHandler.post(new Runnable() {
             @Override
             public void run() {
                 closeCamera();
-                openCamera(type);
+                openCamera();
             }
         });
     }
 
+    @Override
     public void cancelAutoFocus() {
         mHandler.post(new Runnable() {
             @Override
@@ -296,6 +341,7 @@ public class CameraContext extends BaseCameraContext {
         });
     }
 
+    @Override
     public void enableCaf() {
         mHandler.post(new Runnable() {
             @Override
@@ -310,6 +356,7 @@ public class CameraContext extends BaseCameraContext {
         });
     }
 
+    @Override
     public void onTouchAF(float x, float y,
                           int focusW, int focusH,
                           int previewW, int previewH,
@@ -360,37 +407,22 @@ public class CameraContext extends BaseCameraContext {
         }
     }
 
-    public void release() {
-        mHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                closeCamera();
-                if (mMediaRecorder != null) {
-                    mMediaRecorder.release();
-                    mMediaRecorder = null;
-                }
-            }
-        });
-
-        if (mHandler != null) {
-            mHandlerThread.quitSafely();
-            mHandlerThread = null;
-            mHandler = null;
-        }
-    }
-
+    @Override
     public boolean isRecording() {
         return mIsRecording;
     }
 
+    @Override
     public boolean isFront() {
         return mCurCameraInfo.isFront();
     }
 
+    @Override
     public int getDisplayOrientation() {
         return cameraDisplayOrientation;
     }
 
+    @Override
     public void startRecord() {
         mIsRecording = true;
         if (mMediaRecorder == null) {
@@ -453,6 +485,7 @@ public class CameraContext extends BaseCameraContext {
         Log.d(TAG, "startRecord: ");
     }
 
+    @Override
     public void stopRecord() {
         mIsRecording = false;
         Log.d(TAG, "stopRecord: ");
@@ -463,6 +496,7 @@ public class CameraContext extends BaseCameraContext {
         enableCaf();
     }
 
+    @Override
     public void switchFlashMode(String flashMode) {
         if (flashMode == null || mParameters == null) {
             return;
@@ -510,6 +544,7 @@ public class CameraContext extends BaseCameraContext {
     }
 
     private int currentExposureValue = 0;
+    @Override
     public int onExposureChanged(boolean isDown) {
         Log.d(TAG, "onExposureChanged: " + isDown);
         if (mParameters == null) {
@@ -548,6 +583,7 @@ public class CameraContext extends BaseCameraContext {
     }
 
     private boolean isAeLock = false;
+    @Override
     public void setAeLock() {
         isAeLock = !isAeLock;
         Log.d(TAG, "setAeLock: " + isAeLock);

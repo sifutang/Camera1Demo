@@ -199,7 +199,8 @@ public class CameraUtils {
                 continue;
             }
 
-            if (Math.abs(size.getHeight() * 1f / size.getWidth() - ratio) <= 0.003) {
+            float curRatio = size.getHeight() * 1f / size.getWidth();
+            if (Math.abs(curRatio - ratio) <= 0.03) {
                 if (result == null || result.getHeight() < size.getHeight()) {
                     result = size;
                 }
